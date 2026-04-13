@@ -1,0 +1,17 @@
+[package]
+name = "portwatch"
+version = "0.1.0"
+edition = "2024"
+description = "A terminal UI tool for monitoring and managing local web server ports"
+license = "MIT"
+
+[dependencies]
+ratatui = "0.29"
+crossterm = "0.28"
+tokio = { version = "1", features = ["full"] }
+sysinfo = "0.33"
+anyhow = "1"
+dirs = "6"
+toml = "0.8"
+serde = { version = "1", features = ["derive"] }
+clap = { version = "4", features = ["derive"] }
