@@ -2,6 +2,13 @@ use std::fmt;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
+pub struct DockerInfo {
+    pub container_name: String,
+    pub image: String,
+    pub project: Option<String>,
+}
+
+#[derive(Debug, Clone)]
 pub struct PortEntry {
     pub port: u16,
     pub pid: u32,
@@ -14,6 +21,7 @@ pub struct PortEntry {
     pub tech: Option<TechInfo>,
     pub git_info: Option<GitInfo>,
     pub uptime: Option<std::time::Duration>,
+    pub docker_info: Option<DockerInfo>,
     #[allow(dead_code)]
     pub protocol: Protocol,
 }

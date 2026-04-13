@@ -39,8 +39,8 @@ fn draw_help_popup(frame: &mut Frame) {
 
     let help_text = vec![
         Line::from("Navigation"),
-        Line::from("  j / ↓        Move down"),
-        Line::from("  k / ↑        Move up"),
+        Line::from("  j / \u{2193}        Move down"),
+        Line::from("  k / \u{2191}        Move up"),
         Line::from("  g            Go to first"),
         Line::from("  G            Go to last"),
         Line::from(""),
@@ -50,6 +50,11 @@ fn draw_help_popup(frame: &mut Frame) {
         Line::from("  f            Open folder"),
         Line::from("  c            Copy URL"),
         Line::from("  r            Refresh"),
+        Line::from(""),
+        Line::from("Filter & Sort"),
+        Line::from("  /            Search/filter ports"),
+        Line::from("  s            Cycle sort column"),
+        Line::from("  S            Toggle sort direction"),
         Line::from(""),
         Line::from("General"),
         Line::from("  ?            Toggle help"),

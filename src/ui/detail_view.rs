@@ -49,6 +49,24 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
             ]));
         }
 
+        // Docker container info
+        if let Some(docker) = &entry.docker_info {
+            if let Some(project) = &docker.project {
+                lines.push(Line::from(vec![
+                    Span::styled("  Project:   ", Style::default().fg(Color::DarkGray)),
+                    Span::styled(project, Style::default().fg(Color::Magenta)),
+                ]));
+            }
+            lines.push(Line::from(vec![
+                Span::styled("  Container: ", Style::default().fg(Color::DarkGray)),
+                Span::styled(&docker.container_name, Style::default().fg(Color::Cyan)),
+            ]));
+            lines.push(Line::from(vec![
+                Span::styled("  Image:     ", Style::default().fg(Color::DarkGray)),
+                Span::styled(&docker.image, Style::default().fg(Color::White)),
+            ]));
+        }
+
         // Working directory
         if let Some(dir) = &entry.working_dir {
             let dir_str = shorten_path(dir);

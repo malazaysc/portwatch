@@ -87,7 +87,9 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, cli: &Cli) -> 
         if event::poll(Duration::from_millis(200))? {
             if let Event::Key(key) = event::read()? {
                 needs_redraw = true;
-                if app.confirm_kill {
+                if app.filter_active {
+                    handle_filter_key(&mut app, key.code);
+                } else if app.confirm_kill {
                     handle_kill_confirm(&mut app, key.code);
                 } else if app.show_help {
                     match key.code {
@@ -114,6 +116,15 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, cli: &Cli) -> 
     }
 }
 
+fn handle_filter_key(app: &mut App, code: KeyCode) {
+    match code {
+        KeyCode::Enter | KeyCode::Esc => app.close_filter(),
+        KeyCode::Backspace => app.delete_filter_char(),
+        KeyCode::Char(c) => app.update_filter(c),
+        _ => {}
+    }
+}
+
 fn handle_key(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
     match code {
         KeyCode::Char('q') | KeyCode::Esc => app.should_quit = true,
@@ -123,6 +134,9 @@ fn handle_key(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
         KeyCode::Char('g') => app.select_first(),
         KeyCode::Char('G') => app.select_last(),
         KeyCode::Char('?') => app.show_help = true,
+        KeyCode::Char('/') => app.toggle_filter(),
+        KeyCode::Char('s') => app.cycle_sort(),
+        KeyCode::Char('S') => app.toggle_sort_direction(),
         KeyCode::Char('r') => {
             app.request_refresh();
             app.set_status("Refreshing...".to_string());

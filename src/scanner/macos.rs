@@ -69,6 +69,7 @@ impl MacOsScanner {
             tech: None,
             git_info: None,
             uptime: None,
+            docker_info: None,
             protocol,
         })
     }

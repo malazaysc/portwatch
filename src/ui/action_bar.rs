@@ -12,7 +12,13 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
 
     let mut spans = vec![Span::raw("  ")];
 
-    if let Some((msg, _)) = &app.status_message {
+    if app.filter_active {
+        // Show filter input line
+        spans.push(Span::styled(
+            format!("/ filter: {}\u{2588}", app.filter_text),
+            Style::default().fg(Color::White),
+        ));
+    } else if let Some((msg, _)) = &app.status_message {
         spans.push(Span::styled(msg, Style::default().fg(Color::Yellow)));
     } else {
         spans.extend([
@@ -26,6 +32,10 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
             Span::raw("  "),
             key_hint("r", "refresh"),
             Span::raw("  "),
+            key_hint("/", "filter"),
+            Span::raw("  "),
+            key_hint("s", "sort"),
+            Span::raw("  "),
             key_hint("?", "help"),
             Span::raw("  "),
             key_hint("q", "quit"),
@@ -34,7 +44,10 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
 
     if app.scanning {
         spans.push(Span::raw("  "));
-        spans.push(Span::styled("scanning...", Style::default().fg(Color::DarkGray)));
+        spans.push(Span::styled(
+            "scanning...",
+            Style::default().fg(Color::DarkGray),
+        ));
     }
 
     let content = Line::from(spans);
@@ -44,8 +57,6 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
 }
 
 fn key_hint<'a>(key: &'a str, label: &'a str) -> Span<'a> {
-    // We return just the combined text as a single span for simplicity
-    // A more complex version could use two spans with different styles
     Span::styled(
         format!("[{key}] {label}"),
         Style::default().fg(Color::DarkGray),

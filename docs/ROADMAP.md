@@ -101,10 +101,15 @@ The minimum viable product focused on macOS, core port visibility, and basic act
 - [ ] Show recent stdout/stderr from server processes
 - [ ] Scrollable log panel (toggle with a key)
 
-### Docker Awareness
-- [ ] Detect Docker-published ports
-- [ ] Show container name and image alongside port info
-- [ ] Docker-specific actions (stop container, view logs)
+### Resource Monitoring (per process)
+- [ ] CPU usage via `sysinfo` crate (already a dependency)
+- [ ] Memory (RSS) via `sysinfo` crate
+- [ ] Show CPU/RAM columns in port list and detail view
+- [ ] Disk I/O — Linux: `/proc/PID/io`, macOS: `ioreg` or skip
+- [ ] Network bytes per process — macOS: `nettop`, Linux: `/proc/PID/net`
+- [ ] Sparkline or mini-graph for CPU over time in detail view
+
+### Docker Awareness (moved to v0.2)
 
 ---
 

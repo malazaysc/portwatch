@@ -62,12 +62,13 @@ pub fn detect(command_line: &str) -> Option<TechInfo> {
     })
 }
 
-/// Detect IDE internals, system services, and generic runtimes.
-/// Runs as a lower-priority fallback so specific detections aren't shadowed.
-pub fn detect_runtime(command_line: &str) -> Option<TechInfo> {
+/// Detect known non-server apps: browsers, IDEs, system services.
+/// These should be identified BEFORE project file scanning, because their cwd
+/// may happen to be a project directory (e.g. Chrome cwd in a Rust project).
+pub fn detect_app(command_line: &str) -> Option<TechInfo> {
     let cmd = command_line.to_lowercase();
 
-    // IDE/editor internals — extract workspace name if available
+    // IDE/editor internals
     if let Some(name) = detect_ide(command_line) {
         return Some(TechInfo {
             name,
@@ -75,20 +76,44 @@ pub fn detect_runtime(command_line: &str) -> Option<TechInfo> {
         });
     }
 
+    // Browsers
+    let name = if cmd.contains("google chrome") {
+        "Chrome (debug port)"
+    } else if cmd.contains("firefox") {
+        "Firefox (debug port)"
+    } else if cmd.contains("safari") && !cmd.contains("safariplatform") {
+        "Safari (debug port)"
+    } else if cmd.contains("brave") {
+        "Brave (debug port)"
+    } else if cmd.contains("arc") && cmd.contains("browser") {
+        "Arc (debug port)"
     // System services
-    let name = if cmd.contains("com.docker") {
+    } else if cmd.contains("com.docker") {
         "Docker"
-    } else if cmd.contains("postgres") {
+    } else if cmd.contains("controlcenter") || cmd.contains("coreaudio") {
+        "macOS System"
+    } else if cmd.contains("rapportd") {
+        "macOS Rapport"
+    } else {
+        return None;
+    };
+
+    Some(TechInfo {
+        name: name.to_string(),
+        source: DetectionSource::CommandLine,
+    })
+}
+
+/// Detect generic runtimes and databases as a last resort before port heuristics.
+pub fn detect_runtime(command_line: &str) -> Option<TechInfo> {
+    let cmd = command_line.to_lowercase();
+
+    let name = if cmd.contains("postgres") {
         "PostgreSQL"
     } else if cmd.contains("redis-server") {
         "Redis"
     } else if cmd.contains("mongod") {
         "MongoDB"
-    } else if cmd.contains("controlcenter") || cmd.contains("coreaudio") {
-        "macOS System"
-    } else if cmd.contains("rapportd") {
-        "macOS Rapport"
-    // Generic runtimes
     } else if cmd.contains("node") {
         "Node.js"
     } else if cmd.contains("python") || cmd.contains("python3") {

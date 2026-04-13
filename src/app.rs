@@ -2,11 +2,41 @@ use crate::detect;
 use crate::git;
 use crate::process;
 use crate::scanner;
-use crate::types::PortEntry;
+use crate::types::{DetectionSource, PortEntry, TechInfo};
 use std::sync::mpsc;
 use std::time::Instant;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SortColumn {
+    Port,
+    Process,
+    Tech,
+    Uptime,
+}
+
+impl SortColumn {
+    pub fn next(self) -> Self {
+        match self {
+            SortColumn::Port => SortColumn::Process,
+            SortColumn::Process => SortColumn::Tech,
+            SortColumn::Tech => SortColumn::Uptime,
+            SortColumn::Uptime => SortColumn::Port,
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn label(self) -> &'static str {
+        match self {
+            SortColumn::Port => "PORT",
+            SortColumn::Process => "PROCESS",
+            SortColumn::Tech => "TECH",
+            SortColumn::Uptime => "UPTIME",
+        }
+    }
+}
+
 pub struct App {
+    pub all_ports: Vec<PortEntry>,
     pub ports: Vec<PortEntry>,
     pub selected: usize,
     pub should_quit: bool,
@@ -14,6 +44,10 @@ pub struct App {
     pub confirm_kill: bool,
     pub status_message: Option<(String, Instant)>,
     pub scanning: bool,
+    pub filter_text: String,
+    pub filter_active: bool,
+    pub sort_column: SortColumn,
+    pub sort_ascending: bool,
     rx: mpsc::Receiver<ScanResult>,
     scan_trigger: mpsc::Sender<()>,
 }
@@ -43,6 +77,25 @@ impl App {
                             entry.tech = detect::detect_tech(entry);
                         }
                         git::batch_detect(&mut entries);
+
+                        // Enrich Docker ports with container info
+                        let docker_ports = detect::docker::detect_docker_ports();
+                        for entry in &mut entries {
+                            if let Some(info) = docker_ports.get(&entry.port) {
+                                entry.docker_info = Some(info.clone());
+                                // Show project name if available, otherwise container name
+                                let label = if let Some(proj) = &info.project {
+                                    format!("Docker ({proj})")
+                                } else {
+                                    format!("Docker ({})", info.container_name)
+                                };
+                                entry.tech = Some(TechInfo {
+                                    name: label,
+                                    source: DetectionSource::CommandLine,
+                                });
+                            }
+                        }
+
                         ScanResult::Data(entries)
                     }
                     Err(e) => ScanResult::Error(format!("{e}")),
@@ -55,6 +108,7 @@ impl App {
         });
 
         let app = Self {
+            all_ports: Vec::new(),
             ports: Vec::new(),
             selected: 0,
             should_quit: false,
@@ -62,6 +116,10 @@ impl App {
             confirm_kill: false,
             status_message: None,
             scanning: false,
+            filter_text: String::new(),
+            filter_active: false,
+            sort_column: SortColumn::Port,
+            sort_ascending: true,
             rx: data_rx,
             scan_trigger: trigger_tx,
         };
@@ -80,11 +138,9 @@ impl App {
     pub fn poll_results(&mut self) -> bool {
         match self.rx.try_recv() {
             Ok(ScanResult::Data(entries)) => {
-                self.ports = entries;
+                self.all_ports = entries;
                 self.scanning = false;
-                if self.selected >= self.ports.len() && !self.ports.is_empty() {
-                    self.selected = self.ports.len() - 1;
-                }
+                self.apply_filter_and_sort();
                 true
             }
             Ok(ScanResult::Error(e)) => {
@@ -136,5 +192,119 @@ impl App {
             }
         }
         false
+    }
+
+    // --- Filter methods ---
+
+    pub fn toggle_filter(&mut self) {
+        self.filter_active = true;
+    }
+
+    pub fn update_filter(&mut self, c: char) {
+        self.filter_text.push(c);
+        self.apply_filter_and_sort();
+    }
+
+    pub fn delete_filter_char(&mut self) {
+        self.filter_text.pop();
+        self.apply_filter_and_sort();
+    }
+
+    pub fn close_filter(&mut self) {
+        self.filter_active = false;
+    }
+
+    #[allow(dead_code)]
+    pub fn clear_filter(&mut self) {
+        self.filter_text.clear();
+        self.filter_active = false;
+        self.apply_filter_and_sort();
+    }
+
+    // --- Sort methods ---
+
+    pub fn cycle_sort(&mut self) {
+        self.sort_column = self.sort_column.next();
+        self.apply_filter_and_sort();
+    }
+
+    pub fn toggle_sort_direction(&mut self) {
+        self.sort_ascending = !self.sort_ascending;
+        self.apply_filter_and_sort();
+    }
+
+    // --- Internal ---
+
+    fn apply_filter_and_sort(&mut self) {
+        let filter = self.filter_text.to_lowercase();
+
+        // Filter
+        let mut filtered: Vec<PortEntry> = if filter.is_empty() {
+            self.all_ports.clone()
+        } else {
+            self.all_ports
+                .iter()
+                .filter(|entry| {
+                    let port_str = entry.port.to_string();
+                    let process = entry.process_name.to_lowercase();
+                    let tech = entry
+                        .tech
+                        .as_ref()
+                        .map(|t| t.name.to_lowercase())
+                        .unwrap_or_default();
+                    let dir = entry
+                        .working_dir
+                        .as_ref()
+                        .map(|d| d.display().to_string().to_lowercase())
+                        .unwrap_or_default();
+
+                    port_str.contains(&filter)
+                        || process.contains(&filter)
+                        || tech.contains(&filter)
+                        || dir.contains(&filter)
+                })
+                .cloned()
+                .collect()
+        };
+
+        // Sort
+        let ascending = self.sort_ascending;
+        filtered.sort_by(|a, b| {
+            let cmp = match self.sort_column {
+                SortColumn::Port => a.port.cmp(&b.port),
+                SortColumn::Process => a
+                    .process_name
+                    .to_lowercase()
+                    .cmp(&b.process_name.to_lowercase()),
+                SortColumn::Tech => {
+                    let a_tech = a
+                        .tech
+                        .as_ref()
+                        .map(|t| t.name.to_lowercase())
+                        .unwrap_or_default();
+                    let b_tech = b
+                        .tech
+                        .as_ref()
+                        .map(|t| t.name.to_lowercase())
+                        .unwrap_or_default();
+                    a_tech.cmp(&b_tech)
+                }
+                SortColumn::Uptime => {
+                    let a_up = a.uptime.unwrap_or_default();
+                    let b_up = b.uptime.unwrap_or_default();
+                    a_up.cmp(&b_up)
+                }
+            };
+            if ascending { cmp } else { cmp.reverse() }
+        });
+
+        self.ports = filtered;
+
+        // Clamp selection
+        if self.ports.is_empty() {
+            self.selected = 0;
+        } else if self.selected >= self.ports.len() {
+            self.selected = self.ports.len() - 1;
+        }
     }
 }
