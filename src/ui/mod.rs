@@ -39,10 +39,10 @@ fn draw_help_popup(frame: &mut Frame) {
 
     let help_text = vec![
         Line::from("Navigation"),
-        Line::from("  j / \u{2193}        Move down"),
-        Line::from("  k / \u{2191}        Move up"),
-        Line::from("  g            Go to first"),
-        Line::from("  G            Go to last"),
+        Line::from("  \u{2191}/\u{2193}          Move up/down"),
+        Line::from("  \u{2190}            Collapse group"),
+        Line::from("  \u{2192}            Expand group"),
+        Line::from("  Home/End     Go to first/last"),
         Line::from(""),
         Line::from("Actions"),
         Line::from("  x            Kill process"),

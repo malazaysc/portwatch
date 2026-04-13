@@ -42,17 +42,22 @@ impl SortColumn {
     }
 }
 
-/// A group of ports sharing the same project (git repo, Docker compose project, etc.).
-pub struct PortGroup {
-    pub name: String,
-    pub entries: Vec<usize>, // indices into App::ports
+/// A display row in the port list — either a group header or a port entry.
+#[derive(Clone)]
+pub enum DisplayRow {
+    GroupHeader {
+        name: String,
+        count: usize,
+        collapsed: bool,
+    },
+    Port(usize), // index into App::ports
 }
 
 pub struct App {
     pub all_ports: Vec<PortEntry>,
     pub ports: Vec<PortEntry>,
-    pub groups: Vec<PortGroup>,
-    pub selected: usize,
+    pub display_rows: Vec<DisplayRow>,
+    pub selected: usize, // index into display_rows
     pub should_quit: bool,
     pub show_help: bool,
     pub confirm_kill: bool,
@@ -130,7 +135,7 @@ impl App {
         let app = Self {
             all_ports: Vec::new(),
             ports: Vec::new(),
-            groups: Vec::new(),
+            display_rows: Vec::new(),
             selected: 0,
             should_quit: false,
             show_help: false,
@@ -178,26 +183,92 @@ impl App {
     }
 
     pub fn selected_entry(&self) -> Option<&PortEntry> {
-        self.ports.get(self.selected)
+        if let Some(DisplayRow::Port(idx)) = self.display_rows.get(self.selected) {
+            self.ports.get(*idx)
+        } else {
+            None
+        }
     }
 
     pub fn select_next(&mut self) {
-        if !self.ports.is_empty() {
-            self.selected = (self.selected + 1).min(self.ports.len() - 1);
+        if self.selected + 1 < self.display_rows.len() {
+            self.selected += 1;
+            self.auto_expand_if_needed();
         }
     }
 
     pub fn select_prev(&mut self) {
-        self.selected = self.selected.saturating_sub(1);
+        if self.selected > 0 {
+            self.selected -= 1;
+            self.auto_expand_if_needed();
+        }
     }
 
     pub fn select_first(&mut self) {
         self.selected = 0;
+        self.auto_expand_if_needed();
     }
 
     pub fn select_last(&mut self) {
-        if !self.ports.is_empty() {
-            self.selected = self.ports.len() - 1;
+        if !self.display_rows.is_empty() {
+            self.selected = self.display_rows.len() - 1;
+            self.auto_expand_if_needed();
+        }
+    }
+
+    /// If cursor lands on a collapsed group header, expand it automatically.
+    fn auto_expand_if_needed(&mut self) {
+        if let Some(DisplayRow::GroupHeader { collapsed, .. }) = self.display_rows.get(self.selected) {
+            if *collapsed {
+                self.expand_group();
+            }
+        }
+    }
+
+    /// Expand the group at cursor
+    pub fn expand_group(&mut self) {
+        if let Some(DisplayRow::GroupHeader { name, collapsed, .. }) = self.display_rows.get(self.selected) {
+            if *collapsed {
+                let name = name.clone();
+                for row in &mut self.display_rows {
+                    if let DisplayRow::GroupHeader { name: n, collapsed: c, .. } = row {
+                        if *n == name {
+                            *c = false;
+                            break;
+                        }
+                    }
+                }
+                self.rebuild_display_rows();
+            }
+        }
+    }
+
+    /// Collapse the group at cursor (or the group containing the current port)
+    pub fn collapse_group(&mut self) {
+        let group_name = match self.display_rows.get(self.selected) {
+            Some(DisplayRow::GroupHeader { name, .. }) => name.clone(),
+            Some(DisplayRow::Port(idx)) => Self::project_key(&self.ports[*idx]),
+            None => return,
+        };
+
+        for row in &mut self.display_rows {
+            if let DisplayRow::GroupHeader { name, collapsed, .. } = row {
+                if *name == group_name {
+                    *collapsed = true;
+                    break;
+                }
+            }
+        }
+        self.rebuild_display_rows();
+
+        // Move cursor to the group header
+        for (i, row) in self.display_rows.iter().enumerate() {
+            if let DisplayRow::GroupHeader { name, .. } = row {
+                if *name == group_name {
+                    self.selected = i;
+                    return;
+                }
+            }
         }
     }
 
@@ -331,38 +402,122 @@ impl App {
 
         self.ports = filtered;
 
-        // Build groups by project key
-        self.groups = self.build_groups();
+        // Preserve collapse state from current display_rows
+        let collapsed_groups: Vec<String> = self
+            .display_rows
+            .iter()
+            .filter_map(|row| match row {
+                DisplayRow::GroupHeader {
+                    name, collapsed, ..
+                } if *collapsed => Some(name.clone()),
+                _ => None,
+            })
+            .collect();
 
-        // Clamp selection
-        if self.ports.is_empty() {
-            self.selected = 0;
-        } else if self.selected >= self.ports.len() {
-            self.selected = self.ports.len() - 1;
-        }
-    }
-
-    fn build_groups(&self) -> Vec<PortGroup> {
-        let mut groups: Vec<PortGroup> = Vec::new();
+        // Build groups
+        let mut group_order: Vec<String> = Vec::new();
+        let mut group_entries: std::collections::HashMap<String, Vec<usize>> =
+            std::collections::HashMap::new();
 
         for (i, entry) in self.ports.iter().enumerate() {
             let key = Self::project_key(entry);
-            if let Some(group) = groups.iter_mut().find(|g| g.name == key) {
-                group.entries.push(i);
-            } else {
-                groups.push(PortGroup {
-                    name: key,
-                    entries: vec![i],
+            if !group_order.contains(&key) {
+                group_order.push(key.clone());
+            }
+            group_entries.entry(key).or_default().push(i);
+        }
+
+        // Build display rows
+        let show_groups = group_order.len() > 1;
+        let mut rows = Vec::new();
+
+        for group_name in &group_order {
+            let entries = &group_entries[group_name];
+            let collapsed = collapsed_groups.contains(group_name);
+
+            if show_groups {
+                rows.push(DisplayRow::GroupHeader {
+                    name: group_name.clone(),
+                    count: entries.len(),
+                    collapsed,
                 });
+            }
+
+            if !collapsed || !show_groups {
+                for &idx in entries {
+                    rows.push(DisplayRow::Port(idx));
+                }
             }
         }
 
-        groups
+        self.display_rows = rows;
+
+        // Clamp selection to a valid port row
+        if self.display_rows.is_empty() {
+            self.selected = 0;
+        } else if self.selected >= self.display_rows.len() {
+            self.selected = self.display_rows.len() - 1;
+        }
+    }
+
+    fn rebuild_display_rows(&mut self) {
+        // Collect current collapse state
+        let mut collapsed_map: std::collections::HashMap<String, bool> =
+            std::collections::HashMap::new();
+        for row in &self.display_rows {
+            if let DisplayRow::GroupHeader {
+                name, collapsed, ..
+            } = row
+            {
+                collapsed_map.insert(name.clone(), *collapsed);
+            }
+        }
+
+        // Rebuild groups
+        let mut group_order: Vec<String> = Vec::new();
+        let mut group_entries: std::collections::HashMap<String, Vec<usize>> =
+            std::collections::HashMap::new();
+
+        for (i, entry) in self.ports.iter().enumerate() {
+            let key = Self::project_key(entry);
+            if !group_order.contains(&key) {
+                group_order.push(key.clone());
+            }
+            group_entries.entry(key).or_default().push(i);
+        }
+
+        let show_groups = group_order.len() > 1;
+        let mut rows = Vec::new();
+
+        for group_name in &group_order {
+            let entries = &group_entries[group_name];
+            let collapsed = collapsed_map.get(group_name).copied().unwrap_or(false);
+
+            if show_groups {
+                rows.push(DisplayRow::GroupHeader {
+                    name: group_name.clone(),
+                    count: entries.len(),
+                    collapsed,
+                });
+            }
+
+            if !collapsed || !show_groups {
+                for &idx in entries {
+                    rows.push(DisplayRow::Port(idx));
+                }
+            }
+        }
+
+        self.display_rows = rows;
+
+        if self.selected >= self.display_rows.len() && !self.display_rows.is_empty() {
+            self.selected = self.display_rows.len() - 1;
+        }
     }
 
     /// Determine the project grouping key for a port entry.
     fn project_key(entry: &PortEntry) -> String {
-        // 1. Git repo root -- use the last path component as the display name
+        // 1. Git repo root
         if let Some(git) = &entry.git_info {
             if let Some(name) = git.repo_root.file_name() {
                 return name.to_string_lossy().to_string();
@@ -370,15 +525,22 @@ impl App {
             return git.repo_root.display().to_string();
         }
 
-        // 2. Docker compose project name
+        // 2. Docker compose project
         if let Some(docker) = &entry.docker_info {
             if let Some(project) = &docker.project {
-                return format!("Docker ({project})");
+                return project.clone();
             }
             return format!("Docker ({})", docker.container_name);
         }
 
-        // 3. Working directory -- use its last component
+        // 3. IDE/app with workspace name in tech label — e.g. "Cursor (navaris)" → "navaris"
+        if let Some(tech) = &entry.tech {
+            if let Some(project) = extract_parens_project(&tech.name) {
+                return project;
+            }
+        }
+
+        // 4. Working directory
         if let Some(dir) = &entry.working_dir {
             let s = dir.display().to_string();
             if s != "/" {
@@ -388,7 +550,33 @@ impl App {
             }
         }
 
-        // 4. Fallback
+        // 5. Group by process name for known apps (Postman, Zed, etc.)
+        let name = &entry.process_name;
+        if matches!(
+            name.as_str(),
+            "Postman" | "zed" | "Google" | "ControlCe" | "rapportd"
+        ) {
+            return entry
+                .tech
+                .as_ref()
+                .map(|t| t.name.clone())
+                .unwrap_or_else(|| name.clone());
+        }
+
         "System".to_string()
     }
+}
+
+/// Extract project name from parentheses: "Cursor (navaris)" → "navaris"
+fn extract_parens_project(label: &str) -> Option<String> {
+    let start = label.find('(')?;
+    let end = label.find(')')?;
+    if end > start + 1 {
+        let project = &label[start + 1..end];
+        // Skip generic labels
+        if !matches!(project, "internal" | "debug port" | "likely") {
+            return Some(project.to_string());
+        }
+    }
+    None
 }

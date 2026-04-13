@@ -1,10 +1,10 @@
-use crate::app::{App, SortColumn};
+use crate::app::{App, DisplayRow, SortColumn};
 use crate::types::{BindAddress, format_uptime};
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Row, Table};
+use ratatui::widgets::{Block, Borders, Row, Table, TableState};
 
 pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
     let is_extra_wide = area.width >= 120;
@@ -20,143 +20,129 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
         )
         .height(1);
 
-    // Count total columns for group header spanning
     let num_cols = {
-        let mut n = 3; // PORT, PROCESS, TECH
-        if is_medium { n += 2; } // DIRECTORY, UPTIME
-        if is_extra_wide { n += 2; } // CPU%, MEM
-        if is_wide { n += 1; } // PID
+        let mut n = 3;
+        if is_medium { n += 2; }
+        if is_extra_wide { n += 2; }
+        if is_wide { n += 1; }
         n
     };
 
-    // Build rows with group headers interleaved
-    let show_groups = app.groups.len() > 1;
     let mut rows: Vec<Row> = Vec::new();
 
-    for group in &app.groups {
-        // Insert group header row (only if there are multiple groups)
-        if show_groups {
-            let header_text = format!(
-                "\u{25bc} {} ({} {})",
-                group.name,
-                group.entries.len(),
-                if group.entries.len() == 1 { "port" } else { "ports" }
-            );
-            let mut cells: Vec<ratatui::text::Text> = vec![
-                ratatui::text::Text::styled(
-                    header_text,
+    for (i, display_row) in app.display_rows.iter().enumerate() {
+        match display_row {
+            DisplayRow::GroupHeader { name, count, collapsed } => {
+                let arrow = if *collapsed { "\u{25b6}" } else { "\u{25bc}" };
+                let header_text = format!(
+                    "{arrow} {name} ({count} {})",
+                    if *count == 1 { "port" } else { "ports" }
+                );
+
+                let style = if i == app.selected {
                     Style::default()
                         .fg(Color::Cyan)
-                        .add_modifier(Modifier::BOLD),
-                ),
-            ];
-            // Fill remaining columns with empty cells
-            for _ in 1..num_cols {
-                cells.push(ratatui::text::Text::raw(""));
-            }
-            rows.push(
-                Row::new(cells).style(
+                        .bg(Color::DarkGray)
+                        .add_modifier(Modifier::BOLD)
+                } else {
                     Style::default()
                         .fg(Color::Cyan)
-                        .add_modifier(Modifier::BOLD),
-                ),
-            );
-        }
-
-        // Insert port entry rows for this group
-        for &idx in &group.entries {
-            let entry = &app.ports[idx];
-            let selected = idx == app.selected;
-            let style = if selected {
-                Style::default()
-                    .bg(Color::DarkGray)
-                    .fg(Color::White)
-                    .add_modifier(Modifier::BOLD)
-            } else if !entry.is_own {
-                Style::default().fg(Color::DarkGray)
-            } else {
-                Style::default()
-            };
-
-            let exposure_indicator = match &entry.bind_address {
-                BindAddress::Local => Span::styled("\u{25cf}", Style::default().fg(Color::Green)),
-                BindAddress::Exposed => Span::styled("\u{25cf}", Style::default().fg(Color::Red)),
-                BindAddress::Specific(_) => {
-                    Span::styled("\u{25cf}", Style::default().fg(Color::Yellow))
-                }
-            };
-
-            let port_cell = Line::from(vec![
-                exposure_indicator,
-                Span::raw(" "),
-                Span::raw(entry.port.to_string()),
-            ]);
-
-            let tech = entry
-                .tech
-                .as_ref()
-                .map(|t| t.name.as_str())
-                .unwrap_or("\u{2014}");
-
-            let tech_style = tech_color(tech);
-
-            let dir_display = entry
-                .working_dir
-                .as_ref()
-                .map(|d| shorten_path(d))
-                .unwrap_or_else(|| "\u{2014}".to_string());
-
-            let uptime = entry
-                .uptime
-                .as_ref()
-                .map(|u| format_uptime(u))
-                .unwrap_or_else(|| "\u{2014}".to_string());
-
-            let mut cells = vec![
-                ratatui::text::Text::from(port_cell),
-                ratatui::text::Text::styled(entry.process_name.clone(), Style::default()),
-                ratatui::text::Text::styled(tech.to_string(), tech_style),
-            ];
-
-            if is_medium {
-                cells.push(ratatui::text::Text::raw(dir_display));
-                cells.push(ratatui::text::Text::styled(
-                    uptime,
-                    Style::default().fg(Color::DarkGray),
-                ));
-            }
-
-            if is_extra_wide {
-                let cpu_str = entry
-                    .cpu_usage
-                    .map(|c| format!("{:.1}%", c))
-                    .unwrap_or_else(|| "\u{2014}".to_string());
-                cells.push(ratatui::text::Text::styled(
-                    cpu_str,
-                    Style::default().fg(Color::DarkGray),
-                ));
-
-                let mem_str = match entry.memory_mb {
-                    Some(mb) if mb >= 1024.0 => format!("{:.1}G", mb / 1024.0),
-                    Some(mb) => format!("{:.1}M", mb),
-                    None => "\u{2014}".to_string(),
+                        .add_modifier(Modifier::BOLD)
                 };
-                cells.push(ratatui::text::Text::styled(
-                    mem_str,
-                    Style::default().fg(Color::DarkGray),
-                ));
-            }
 
-            if is_wide {
-                cells.push(ratatui::text::Text::raw(entry.pid.to_string()));
+                let mut cells: Vec<ratatui::text::Text> = vec![
+                    ratatui::text::Text::styled(header_text, style),
+                ];
+                for _ in 1..num_cols {
+                    cells.push(ratatui::text::Text::raw(""));
+                }
+                rows.push(Row::new(cells).style(style));
             }
+            DisplayRow::Port(idx) => {
+                let entry = &app.ports[*idx];
+                let style = if !entry.is_own {
+                    Style::default().fg(Color::DarkGray)
+                } else {
+                    Style::default()
+                };
 
-            rows.push(Row::new(cells).style(style));
+                let exposure_indicator = match &entry.bind_address {
+                    BindAddress::Local => Span::styled("\u{25cf}", Style::default().fg(Color::Green)),
+                    BindAddress::Exposed => Span::styled("\u{25cf}", Style::default().fg(Color::Red)),
+                    BindAddress::Specific(_) => Span::styled("\u{25cf}", Style::default().fg(Color::Yellow)),
+                };
+
+                let port_cell = Line::from(vec![
+                    exposure_indicator,
+                    Span::raw(" "),
+                    Span::raw(entry.port.to_string()),
+                ]);
+
+                let tech = entry
+                    .tech
+                    .as_ref()
+                    .map(|t| t.name.as_str())
+                    .unwrap_or("\u{2014}");
+
+                let tech_style = tech_color(tech);
+
+                let dir_display = entry
+                    .working_dir
+                    .as_ref()
+                    .map(|d| shorten_path(d))
+                    .unwrap_or_else(|| "\u{2014}".to_string());
+
+                let uptime = entry
+                    .uptime
+                    .as_ref()
+                    .map(|u| format_uptime(u))
+                    .unwrap_or_else(|| "\u{2014}".to_string());
+
+                let mut cells = vec![
+                    ratatui::text::Text::from(port_cell),
+                    ratatui::text::Text::styled(entry.process_name.clone(), Style::default()),
+                    ratatui::text::Text::styled(tech.to_string(), tech_style),
+                ];
+
+                if is_medium {
+                    cells.push(ratatui::text::Text::raw(dir_display));
+                    cells.push(ratatui::text::Text::styled(
+                        uptime,
+                        Style::default().fg(Color::DarkGray),
+                    ));
+                }
+
+                if is_extra_wide {
+                    let cpu_str = entry
+                        .cpu_usage
+                        .map(|c| format!("{:.1}%", c))
+                        .unwrap_or_else(|| "\u{2014}".to_string());
+                    cells.push(ratatui::text::Text::styled(
+                        cpu_str,
+                        Style::default().fg(Color::DarkGray),
+                    ));
+
+                    let mem_str = match entry.memory_mb {
+                        Some(mb) if mb >= 1024.0 => format!("{:.1}G", mb / 1024.0),
+                        Some(mb) => format!("{:.1}M", mb),
+                        None => "\u{2014}".to_string(),
+                    };
+                    cells.push(ratatui::text::Text::styled(
+                        mem_str,
+                        Style::default().fg(Color::DarkGray),
+                    ));
+                }
+
+                if is_wide {
+                    cells.push(ratatui::text::Text::raw(entry.pid.to_string()));
+                }
+
+                rows.push(Row::new(cells).style(style));
+            }
         }
     }
 
     let title = build_title(app);
-
     let widths = build_widths(is_extra_wide, is_wide, is_medium, area.width);
 
     let table = Table::new(rows, widths)
@@ -173,7 +159,9 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
                 .add_modifier(Modifier::BOLD),
         );
 
-    frame.render_widget(table, area);
+    let mut state = TableState::default();
+    state.select(Some(app.selected));
+    frame.render_stateful_widget(table, area, &mut state);
 }
 
 fn build_title(app: &App) -> String {
@@ -226,20 +214,20 @@ fn build_header(app: &App, is_extra_wide: bool, is_wide: bool, is_medium: bool) 
 fn build_widths(is_extra_wide: bool, is_wide: bool, is_medium: bool, _total: u16) -> Vec<ratatui::layout::Constraint> {
     use ratatui::layout::Constraint;
     let mut w = vec![
-        Constraint::Length(10), // PORT
-        Constraint::Length(14), // PROCESS
-        Constraint::Length(16), // TECH
+        Constraint::Length(10),
+        Constraint::Length(14),
+        Constraint::Length(16),
     ];
     if is_medium {
-        w.push(Constraint::Min(20)); // DIRECTORY
-        w.push(Constraint::Length(10)); // UPTIME
+        w.push(Constraint::Min(20));
+        w.push(Constraint::Length(10));
     }
     if is_extra_wide {
-        w.push(Constraint::Length(8));  // CPU%
-        w.push(Constraint::Length(8));  // MEM
+        w.push(Constraint::Length(8));
+        w.push(Constraint::Length(8));
     }
     if is_wide {
-        w.push(Constraint::Length(8)); // PID
+        w.push(Constraint::Length(8));
     }
     w
 }
@@ -250,16 +238,8 @@ fn tech_color(tech: &str) -> Style {
         t if t.contains("Vite") || t.contains("Vue") || t.contains("Nuxt") => Color::Green,
         t if t.contains("Angular") => Color::Red,
         t if t.contains("Svelte") => Color::LightRed,
-        t if t.contains("Node") || t.contains("Express") || t.contains("Fastify") => {
-            Color::LightGreen
-        }
-        t if t.contains("Python")
-            || t.contains("Django")
-            || t.contains("Flask")
-            || t.contains("FastAPI") =>
-        {
-            Color::Yellow
-        }
+        t if t.contains("Node") || t.contains("Express") || t.contains("Fastify") => Color::LightGreen,
+        t if t.contains("Python") || t.contains("Django") || t.contains("Flask") || t.contains("FastAPI") => Color::Yellow,
         t if t.contains("Rust") || t.contains("Axum") || t.contains("Actix") => Color::LightRed,
         t if t.contains("Go") || t.contains("Gin") => Color::Cyan,
         t if t.contains("Ruby") || t.contains("Rails") => Color::Red,
@@ -267,13 +247,7 @@ fn tech_color(tech: &str) -> Style {
         t if t.contains("PHP") || t.contains("Laravel") => Color::Magenta,
         t if t.contains("Deno") => Color::LightCyan,
         t if t.contains("Bun") => Color::LightYellow,
-        t if t.contains("PostgreSQL")
-            || t.contains("MySQL")
-            || t.contains("Redis")
-            || t.contains("MongoDB") =>
-        {
-            Color::Magenta
-        }
+        t if t.contains("PostgreSQL") || t.contains("MySQL") || t.contains("Redis") || t.contains("MongoDB") => Color::Magenta,
         "\u{2014}" => Color::DarkGray,
         _ => Color::White,
     };
