@@ -1,5 +1,6 @@
 mod actions;
 mod app;
+mod config;
 mod detect;
 mod git;
 mod process;
@@ -32,8 +33,22 @@ struct Cli {
     interval: u64,
 }
 
+/// Check whether --interval was explicitly passed on the command line.
+fn cli_interval_was_provided() -> bool {
+    std::env::args().any(|a| a == "--interval" || a == "-i" || a.starts_with("--interval="))
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
+    let cfg = config::load().unwrap_or_default();
+
+    // CLI --interval overrides config file when explicitly provided
+    let refresh_secs = if cli_interval_was_provided() {
+        cli.interval
+    } else {
+        cfg.refresh_interval
+    };
+    let terminal_setting = cfg.terminal.clone();
 
     // Set up panic hook to restore terminal on crash
     let original_hook = std::panic::take_hook();
@@ -51,7 +66,7 @@ fn main() -> Result<()> {
     let mut terminal = Terminal::new(backend)?;
 
     // Run the app
-    let result = run_app(&mut terminal, &cli);
+    let result = run_app(&mut terminal, refresh_secs, &terminal_setting);
 
     // Restore terminal
     disable_raw_mode()?;
@@ -61,9 +76,13 @@ fn main() -> Result<()> {
     result
 }
 
-fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, cli: &Cli) -> Result<()> {
+fn run_app(
+    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    refresh_secs: u64,
+    terminal_setting: &str,
+) -> Result<()> {
     let mut app = App::new();
-    let refresh_interval = Duration::from_secs(cli.interval);
+    let refresh_interval = Duration::from_secs(refresh_secs);
     let mut last_refresh = Instant::now();
     let mut needs_redraw = true;
 
@@ -99,7 +118,7 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, cli: &Cli) -> 
                         _ => {}
                     }
                 } else {
-                    handle_key(&mut app, key.code, key.modifiers);
+                    handle_key(&mut app, key.code, key.modifiers, terminal_setting);
                 }
             }
         }
@@ -125,7 +144,7 @@ fn handle_filter_key(app: &mut App, code: KeyCode) {
     }
 }
 
-fn handle_key(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
+fn handle_key(app: &mut App, code: KeyCode, modifiers: KeyModifiers, terminal_setting: &str) {
     match code {
         KeyCode::Char('q') | KeyCode::Esc => app.should_quit = true,
         KeyCode::Char('c') if modifiers.contains(KeyModifiers::CONTROL) => app.should_quit = true,
@@ -158,7 +177,7 @@ fn handle_key(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
         KeyCode::Char('f') => {
             if let Some(entry) = app.selected_entry() {
                 let entry = entry.clone();
-                match actions::open_folder(&entry) {
+                match actions::open_folder(&entry, terminal_setting) {
                     Ok(()) => app.set_status("Opened folder".to_string()),
                     Err(e) => app.set_status(format!("Error: {e}")),
                 }

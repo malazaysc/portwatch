@@ -72,7 +72,10 @@ impl App {
 
                 let result = match scanner.scan() {
                     Ok(mut entries) => {
+                        #[cfg(target_os = "macos")]
                         process::macos::batch_resolve(&mut entries);
+                        #[cfg(target_os = "linux")]
+                        process::linux::batch_resolve(&mut entries);
                         for entry in &mut entries {
                             entry.tech = detect::detect_tech(entry);
                         }
