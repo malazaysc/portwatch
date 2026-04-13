@@ -22,6 +22,8 @@ pub struct PortEntry {
     pub git_info: Option<GitInfo>,
     pub uptime: Option<std::time::Duration>,
     pub docker_info: Option<DockerInfo>,
+    pub cpu_usage: Option<f32>,
+    pub memory_mb: Option<f64>,
     #[allow(dead_code)]
     pub protocol: Protocol,
 }

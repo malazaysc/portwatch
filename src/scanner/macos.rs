@@ -70,6 +70,8 @@ impl MacOsScanner {
             git_info: None,
             uptime: None,
             docker_info: None,
+            cpu_usage: None,
+            memory_mb: None,
             protocol,
         })
     }

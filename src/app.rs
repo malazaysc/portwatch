@@ -1,6 +1,7 @@
 use crate::detect;
 use crate::git;
 use crate::process;
+use crate::resources;
 use crate::scanner;
 use crate::types::{DetectionSource, PortEntry, TechInfo};
 use std::sync::mpsc;
@@ -12,6 +13,8 @@ pub enum SortColumn {
     Process,
     Tech,
     Uptime,
+    Cpu,
+    Memory,
 }
 
 impl SortColumn {
@@ -20,7 +23,9 @@ impl SortColumn {
             SortColumn::Port => SortColumn::Process,
             SortColumn::Process => SortColumn::Tech,
             SortColumn::Tech => SortColumn::Uptime,
-            SortColumn::Uptime => SortColumn::Port,
+            SortColumn::Uptime => SortColumn::Cpu,
+            SortColumn::Cpu => SortColumn::Memory,
+            SortColumn::Memory => SortColumn::Port,
         }
     }
 
@@ -31,13 +36,22 @@ impl SortColumn {
             SortColumn::Process => "PROCESS",
             SortColumn::Tech => "TECH",
             SortColumn::Uptime => "UPTIME",
+            SortColumn::Cpu => "CPU%",
+            SortColumn::Memory => "MEM",
         }
     }
+}
+
+/// A group of ports sharing the same project (git repo, Docker compose project, etc.).
+pub struct PortGroup {
+    pub name: String,
+    pub entries: Vec<usize>, // indices into App::ports
 }
 
 pub struct App {
     pub all_ports: Vec<PortEntry>,
     pub ports: Vec<PortEntry>,
+    pub groups: Vec<PortGroup>,
     pub selected: usize,
     pub should_quit: bool,
     pub show_help: bool,
@@ -99,6 +113,9 @@ impl App {
                             }
                         }
 
+                        // Collect per-process CPU and memory usage
+                        resources::collect_resources(&mut entries);
+
                         ScanResult::Data(entries)
                     }
                     Err(e) => ScanResult::Error(format!("{e}")),
@@ -113,6 +130,7 @@ impl App {
         let app = Self {
             all_ports: Vec::new(),
             ports: Vec::new(),
+            groups: Vec::new(),
             selected: 0,
             should_quit: false,
             show_help: false,
@@ -297,11 +315,24 @@ impl App {
                     let b_up = b.uptime.unwrap_or_default();
                     a_up.cmp(&b_up)
                 }
+                SortColumn::Cpu => {
+                    let a_cpu = a.cpu_usage.unwrap_or(0.0);
+                    let b_cpu = b.cpu_usage.unwrap_or(0.0);
+                    a_cpu.partial_cmp(&b_cpu).unwrap_or(std::cmp::Ordering::Equal)
+                }
+                SortColumn::Memory => {
+                    let a_mem = a.memory_mb.unwrap_or(0.0);
+                    let b_mem = b.memory_mb.unwrap_or(0.0);
+                    a_mem.partial_cmp(&b_mem).unwrap_or(std::cmp::Ordering::Equal)
+                }
             };
             if ascending { cmp } else { cmp.reverse() }
         });
 
         self.ports = filtered;
+
+        // Build groups by project key
+        self.groups = self.build_groups();
 
         // Clamp selection
         if self.ports.is_empty() {
@@ -309,5 +340,55 @@ impl App {
         } else if self.selected >= self.ports.len() {
             self.selected = self.ports.len() - 1;
         }
+    }
+
+    fn build_groups(&self) -> Vec<PortGroup> {
+        let mut groups: Vec<PortGroup> = Vec::new();
+
+        for (i, entry) in self.ports.iter().enumerate() {
+            let key = Self::project_key(entry);
+            if let Some(group) = groups.iter_mut().find(|g| g.name == key) {
+                group.entries.push(i);
+            } else {
+                groups.push(PortGroup {
+                    name: key,
+                    entries: vec![i],
+                });
+            }
+        }
+
+        groups
+    }
+
+    /// Determine the project grouping key for a port entry.
+    fn project_key(entry: &PortEntry) -> String {
+        // 1. Git repo root -- use the last path component as the display name
+        if let Some(git) = &entry.git_info {
+            if let Some(name) = git.repo_root.file_name() {
+                return name.to_string_lossy().to_string();
+            }
+            return git.repo_root.display().to_string();
+        }
+
+        // 2. Docker compose project name
+        if let Some(docker) = &entry.docker_info {
+            if let Some(project) = &docker.project {
+                return format!("Docker ({project})");
+            }
+            return format!("Docker ({})", docker.container_name);
+        }
+
+        // 3. Working directory -- use its last component
+        if let Some(dir) = &entry.working_dir {
+            let s = dir.display().to_string();
+            if s != "/" {
+                if let Some(name) = dir.file_name() {
+                    return name.to_string_lossy().to_string();
+                }
+            }
+        }
+
+        // 4. Fallback
+        "System".to_string()
     }
 }

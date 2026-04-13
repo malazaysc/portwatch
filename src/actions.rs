@@ -49,6 +49,7 @@ pub fn open_folder(entry: &PortEntry, terminal: &str) -> Result<()> {
         .as_ref()
         .context("No working directory known for this process")?;
 
+    #[cfg(target_os = "macos")]
     let dir_str = dir.to_string_lossy();
 
     match terminal {
@@ -132,23 +133,57 @@ end tell"#,
 }
 
 /// Escape a string for use inside AppleScript double-quoted strings.
+#[cfg(target_os = "macos")]
 fn shell_escape(s: &str) -> String {
     s.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
 pub fn copy_url_to_clipboard(entry: &PortEntry) -> Result<()> {
     let url = format!("http://localhost:{}", entry.port);
-    let mut child = Command::new("pbcopy")
-        .stdin(std::process::Stdio::piped())
-        .spawn()
-        .context("Failed to run pbcopy")?;
 
-    use std::io::Write;
-    if let Some(ref mut stdin) = child.stdin {
-        stdin
-            .write_all(url.as_bytes())
-            .context("Failed to write to pbcopy")?;
+    #[cfg(target_os = "macos")]
+    {
+        let mut child = Command::new("pbcopy")
+            .stdin(std::process::Stdio::piped())
+            .spawn()
+            .context("Failed to run pbcopy")?;
+
+        use std::io::Write;
+        if let Some(ref mut stdin) = child.stdin {
+            stdin
+                .write_all(url.as_bytes())
+                .context("Failed to write to pbcopy")?;
+        }
+        child.wait().context("pbcopy failed")?;
     }
-    child.wait().context("pbcopy failed")?;
+
+    #[cfg(target_os = "linux")]
+    {
+        // Try xclip first, fall back to xsel
+        let result = Command::new("xclip")
+            .args(["-selection", "clipboard"])
+            .stdin(std::process::Stdio::piped())
+            .spawn();
+
+        let mut child = match result {
+            Ok(child) => child,
+            Err(_) => Command::new("xsel")
+                .arg("--clipboard")
+                .stdin(std::process::Stdio::piped())
+                .spawn()
+                .context(
+                    "Failed to copy to clipboard — install xclip or xsel",
+                )?,
+        };
+
+        use std::io::Write;
+        if let Some(ref mut stdin) = child.stdin {
+            stdin
+                .write_all(url.as_bytes())
+                .context("Failed to write to clipboard")?;
+        }
+        child.wait().context("Clipboard command failed")?;
+    }
+
     Ok(())
 }

@@ -4,6 +4,7 @@ mod config;
 mod detect;
 mod git;
 mod process;
+mod resources;
 mod scanner;
 mod types;
 mod ui;

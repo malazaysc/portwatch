@@ -122,6 +122,27 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
             ]));
         }
 
+        // CPU usage
+        if let Some(cpu) = entry.cpu_usage {
+            lines.push(Line::from(vec![
+                Span::styled("  CPU:   ", Style::default().fg(Color::DarkGray)),
+                Span::styled(format!("{:.1}%", cpu), Style::default().fg(Color::White)),
+            ]));
+        }
+
+        // Memory usage
+        if let Some(mem_mb) = entry.memory_mb {
+            let mem_str = if mem_mb >= 1024.0 {
+                format!("{:.1} GB", mem_mb / 1024.0)
+            } else {
+                format!("{:.1} MB", mem_mb)
+            };
+            lines.push(Line::from(vec![
+                Span::styled("  Mem:   ", Style::default().fg(Color::DarkGray)),
+                Span::styled(mem_str, Style::default().fg(Color::White)),
+            ]));
+        }
+
         lines
     } else {
         vec![Line::from(Span::styled(

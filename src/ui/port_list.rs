@@ -7,10 +7,11 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Row, Table};
 
 pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
+    let is_extra_wide = area.width >= 120;
     let is_wide = area.width >= 100;
     let is_medium = area.width >= 70;
 
-    let header_cells = build_header(app, is_wide, is_medium);
+    let header_cells = build_header(app, is_extra_wide, is_wide, is_medium);
     let header = Row::new(header_cells)
         .style(
             Style::default()
@@ -19,12 +20,53 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
         )
         .height(1);
 
-    let rows: Vec<Row> = app
-        .ports
-        .iter()
-        .enumerate()
-        .map(|(i, entry)| {
-            let selected = i == app.selected;
+    // Count total columns for group header spanning
+    let num_cols = {
+        let mut n = 3; // PORT, PROCESS, TECH
+        if is_medium { n += 2; } // DIRECTORY, UPTIME
+        if is_extra_wide { n += 2; } // CPU%, MEM
+        if is_wide { n += 1; } // PID
+        n
+    };
+
+    // Build rows with group headers interleaved
+    let show_groups = app.groups.len() > 1;
+    let mut rows: Vec<Row> = Vec::new();
+
+    for group in &app.groups {
+        // Insert group header row (only if there are multiple groups)
+        if show_groups {
+            let header_text = format!(
+                "\u{25bc} {} ({} {})",
+                group.name,
+                group.entries.len(),
+                if group.entries.len() == 1 { "port" } else { "ports" }
+            );
+            let mut cells: Vec<ratatui::text::Text> = vec![
+                ratatui::text::Text::styled(
+                    header_text,
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
+            ];
+            // Fill remaining columns with empty cells
+            for _ in 1..num_cols {
+                cells.push(ratatui::text::Text::raw(""));
+            }
+            rows.push(
+                Row::new(cells).style(
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
+            );
+        }
+
+        // Insert port entry rows for this group
+        for &idx in &group.entries {
+            let entry = &app.ports[idx];
+            let selected = idx == app.selected;
             let style = if selected {
                 Style::default()
                     .bg(Color::DarkGray)
@@ -37,10 +79,10 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
             };
 
             let exposure_indicator = match &entry.bind_address {
-                BindAddress::Local => Span::styled("●", Style::default().fg(Color::Green)),
-                BindAddress::Exposed => Span::styled("●", Style::default().fg(Color::Red)),
+                BindAddress::Local => Span::styled("\u{25cf}", Style::default().fg(Color::Green)),
+                BindAddress::Exposed => Span::styled("\u{25cf}", Style::default().fg(Color::Red)),
                 BindAddress::Specific(_) => {
-                    Span::styled("●", Style::default().fg(Color::Yellow))
+                    Span::styled("\u{25cf}", Style::default().fg(Color::Yellow))
                 }
             };
 
@@ -84,17 +126,38 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
                 ));
             }
 
+            if is_extra_wide {
+                let cpu_str = entry
+                    .cpu_usage
+                    .map(|c| format!("{:.1}%", c))
+                    .unwrap_or_else(|| "\u{2014}".to_string());
+                cells.push(ratatui::text::Text::styled(
+                    cpu_str,
+                    Style::default().fg(Color::DarkGray),
+                ));
+
+                let mem_str = match entry.memory_mb {
+                    Some(mb) if mb >= 1024.0 => format!("{:.1}G", mb / 1024.0),
+                    Some(mb) => format!("{:.1}M", mb),
+                    None => "\u{2014}".to_string(),
+                };
+                cells.push(ratatui::text::Text::styled(
+                    mem_str,
+                    Style::default().fg(Color::DarkGray),
+                ));
+            }
+
             if is_wide {
                 cells.push(ratatui::text::Text::raw(entry.pid.to_string()));
             }
 
-            Row::new(cells).style(style)
-        })
-        .collect();
+            rows.push(Row::new(cells).style(style));
+        }
+    }
 
     let title = build_title(app);
 
-    let widths = build_widths(is_wide, is_medium, area.width);
+    let widths = build_widths(is_extra_wide, is_wide, is_medium, area.width);
 
     let table = Table::new(rows, widths)
         .header(header)
@@ -126,7 +189,7 @@ fn build_title(app: &App) -> String {
     }
 }
 
-fn build_header(app: &App, is_wide: bool, is_medium: bool) -> Vec<String> {
+fn build_header(app: &App, is_extra_wide: bool, is_wide: bool, is_medium: bool) -> Vec<String> {
     let arrow = if app.sort_ascending {
         " \u{25b2}"
     } else {
@@ -150,13 +213,17 @@ fn build_header(app: &App, is_wide: bool, is_medium: bool) -> Vec<String> {
         h.push("DIRECTORY".to_string());
         h.push(decorate(SortColumn::Uptime, "UPTIME"));
     }
+    if is_extra_wide {
+        h.push(decorate(SortColumn::Cpu, "CPU%"));
+        h.push(decorate(SortColumn::Memory, "MEM"));
+    }
     if is_wide {
         h.push("PID".to_string());
     }
     h
 }
 
-fn build_widths(is_wide: bool, is_medium: bool, _total: u16) -> Vec<ratatui::layout::Constraint> {
+fn build_widths(is_extra_wide: bool, is_wide: bool, is_medium: bool, _total: u16) -> Vec<ratatui::layout::Constraint> {
     use ratatui::layout::Constraint;
     let mut w = vec![
         Constraint::Length(10), // PORT
@@ -166,6 +233,10 @@ fn build_widths(is_wide: bool, is_medium: bool, _total: u16) -> Vec<ratatui::lay
     if is_medium {
         w.push(Constraint::Min(20)); // DIRECTORY
         w.push(Constraint::Length(10)); // UPTIME
+    }
+    if is_extra_wide {
+        w.push(Constraint::Length(8));  // CPU%
+        w.push(Constraint::Length(8));  // MEM
     }
     if is_wide {
         w.push(Constraint::Length(8)); // PID
