@@ -6,55 +6,59 @@ use crate::types::{DetectionSource, TechInfo};
 pub fn detect(command_line: &str) -> Option<TechInfo> {
     let cmd = command_line.to_lowercase();
 
-    let name = if cmd.contains("next dev") || cmd.contains("next start") || cmd.contains("next-server") {
-        "Next.js"
-    } else if cmd.contains("vite") && !cmd.contains("invite") {
-        "Vite"
-    } else if cmd.contains("nuxt") {
-        "Nuxt"
-    } else if cmd.contains("remix") {
-        "Remix"
-    } else if cmd.contains("astro") && (cmd.contains("dev") || cmd.contains("preview")) {
-        "Astro"
-    } else if cmd.contains("webpack") && cmd.contains("serve") {
-        "Webpack"
-    } else if cmd.contains("angular") || cmd.contains("ng serve") {
-        "Angular"
-    } else if cmd.contains("manage.py") && cmd.contains("runserver") {
-        "Django"
-    } else if cmd.contains("flask run") || cmd.contains("flask") && cmd.contains("--app") {
-        "Flask"
-    } else if cmd.contains("uvicorn") {
-        "FastAPI"
-    } else if cmd.contains("gunicorn") {
-        "Gunicorn"
-    } else if cmd.contains("rails") && (cmd.contains("server") || cmd.contains("s")) {
-        "Rails"
-    } else if cmd.contains("puma") {
-        "Puma (Ruby)"
-    } else if cmd.contains("sinatra") {
-        "Sinatra"
-    } else if cmd.contains("php artisan serve") {
-        "Laravel"
-    } else if cmd.contains("hugo server") || cmd.contains("hugo serve") {
-        "Hugo"
-    } else if cmd.contains("jekyll serve") {
-        "Jekyll"
-    } else if cmd.contains("cargo run") || cmd.contains("target/debug/") || cmd.contains("target/release/") {
-        "Rust"
-    } else if cmd.contains("go run") {
-        "Go"
-    } else if cmd.contains("deno") {
-        "Deno"
-    } else if cmd.contains("bun") && !cmd.contains("bundle") {
-        "Bun"
-    } else if cmd.contains("tsx") || cmd.contains("ts-node") {
-        "TypeScript"
-    } else if cmd.contains("nodemon") {
-        "Node.js (nodemon)"
-    } else {
-        return None;
-    };
+    let name =
+        if cmd.contains("next dev") || cmd.contains("next start") || cmd.contains("next-server") {
+            "Next.js"
+        } else if cmd.contains("vite") && !cmd.contains("invite") {
+            "Vite"
+        } else if cmd.contains("nuxt") {
+            "Nuxt"
+        } else if cmd.contains("remix") {
+            "Remix"
+        } else if cmd.contains("astro") && (cmd.contains("dev") || cmd.contains("preview")) {
+            "Astro"
+        } else if cmd.contains("webpack") && cmd.contains("serve") {
+            "Webpack"
+        } else if cmd.contains("angular") || cmd.contains("ng serve") {
+            "Angular"
+        } else if cmd.contains("manage.py") && cmd.contains("runserver") {
+            "Django"
+        } else if cmd.contains("flask run") || cmd.contains("flask") && cmd.contains("--app") {
+            "Flask"
+        } else if cmd.contains("uvicorn") {
+            "FastAPI"
+        } else if cmd.contains("gunicorn") {
+            "Gunicorn"
+        } else if cmd.contains("rails") && (cmd.contains("server") || cmd.contains("s")) {
+            "Rails"
+        } else if cmd.contains("puma") {
+            "Puma (Ruby)"
+        } else if cmd.contains("sinatra") {
+            "Sinatra"
+        } else if cmd.contains("php artisan serve") {
+            "Laravel"
+        } else if cmd.contains("hugo server") || cmd.contains("hugo serve") {
+            "Hugo"
+        } else if cmd.contains("jekyll serve") {
+            "Jekyll"
+        } else if cmd.contains("cargo run")
+            || cmd.contains("target/debug/")
+            || cmd.contains("target/release/")
+        {
+            "Rust"
+        } else if cmd.contains("go run") {
+            "Go"
+        } else if cmd.contains("deno") {
+            "Deno"
+        } else if cmd.contains("bun") && !cmd.contains("bundle") {
+            "Bun"
+        } else if cmd.contains("tsx") || cmd.contains("ts-node") {
+            "TypeScript"
+        } else if cmd.contains("nodemon") {
+            "Node.js (nodemon)"
+        } else {
+            return None;
+        };
 
     Some(TechInfo {
         name: name.to_string(),

@@ -13,7 +13,11 @@ pub fn batch_resolve(entries: &mut [PortEntry]) {
     }
 
     // Batch: get command line + elapsed time for all PIDs in one ps call
-    let pid_list: String = pids.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(",");
+    let pid_list: String = pids
+        .iter()
+        .map(|p| p.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
     let cmd_map = batch_ps_info(&pid_list);
 
     // Get working directories — unfortunately lsof doesn't support batch cwd lookup well,
@@ -95,14 +99,13 @@ fn batch_cwd_lookup(pid_list: &str) -> HashMap<u32, PathBuf> {
             current_fd_is_cwd = false;
         } else if let Some(fd) = line.strip_prefix('f') {
             current_fd_is_cwd = fd == "cwd";
-        } else if let Some(path) = line.strip_prefix('n') {
-            if current_fd_is_cwd {
+        } else if let Some(path) = line.strip_prefix('n')
+            && current_fd_is_cwd {
                 if let Some(pid) = current_pid {
                     map.insert(pid, PathBuf::from(path));
                 }
                 current_fd_is_cwd = false;
             }
-        }
     }
 
     map
@@ -139,4 +142,3 @@ fn parse_etime(etime: &str) -> Option<Duration> {
 
     Some(Duration::from_secs(days * 86400 + secs))
 }
-

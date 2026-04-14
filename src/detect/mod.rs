@@ -1,5 +1,5 @@
-pub mod docker;
 mod command_line;
+pub mod docker;
 mod npm_package;
 mod port_hints;
 mod project_files;

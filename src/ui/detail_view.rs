@@ -19,7 +19,9 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
         lines.push(Line::from(vec![
             Span::styled(
                 format!(":{}", entry.port),
-                Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::White)
+                    .add_modifier(Modifier::BOLD),
             ),
             Span::raw(" — "),
             Span::styled(&entry.process_name, Style::default().fg(Color::Cyan)),
@@ -110,7 +112,10 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
             lines.push(Line::from(vec![
                 Span::styled("  User:  ", Style::default().fg(Color::DarkGray)),
                 Span::styled(&entry.user, Style::default().fg(Color::Yellow)),
-                Span::styled(" (not yours — actions may fail)", Style::default().fg(Color::DarkGray)),
+                Span::styled(
+                    " (not yours — actions may fail)",
+                    Style::default().fg(Color::DarkGray),
+                ),
             ]));
         }
 
@@ -156,10 +161,9 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
 }
 
 fn shorten_path(path: &std::path::Path) -> String {
-    if let Some(home) = dirs::home_dir() {
-        if let Ok(stripped) = path.strip_prefix(&home) {
+    if let Some(home) = dirs::home_dir()
+        && let Ok(stripped) = path.strip_prefix(&home) {
             return format!("~/{}", stripped.display());
         }
-    }
     path.display().to_string()
 }

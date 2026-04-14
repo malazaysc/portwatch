@@ -64,11 +64,10 @@ pub fn detect_docker_ports() -> HashMap<u16, DockerInfo> {
 /// Labels look like: "com.docker.compose.project=navaris,com.supabase.cli.project=navaris,..."
 fn extract_label(labels: &str, key: &str) -> Option<String> {
     for pair in labels.split(',') {
-        if let Some((k, v)) = pair.split_once('=') {
-            if k.trim() == key {
+        if let Some((k, v)) = pair.split_once('=')
+            && k.trim() == key {
                 return Some(v.trim().to_string());
             }
-        }
     }
     None
 }

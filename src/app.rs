@@ -218,29 +218,33 @@ impl App {
 
     /// If cursor lands on a collapsed group header, expand it automatically.
     fn auto_expand_if_needed(&mut self) {
-        if let Some(DisplayRow::GroupHeader { collapsed, .. }) = self.display_rows.get(self.selected) {
-            if *collapsed {
+        if let Some(DisplayRow::GroupHeader { collapsed, .. }) =
+            self.display_rows.get(self.selected)
+            && *collapsed {
                 self.expand_group();
             }
-        }
     }
 
     /// Expand the group at cursor
     pub fn expand_group(&mut self) {
-        if let Some(DisplayRow::GroupHeader { name, collapsed, .. }) = self.display_rows.get(self.selected) {
-            if *collapsed {
+        if let Some(DisplayRow::GroupHeader {
+            name, collapsed, ..
+        }) = self.display_rows.get(self.selected)
+            && *collapsed {
                 let name = name.clone();
                 for row in &mut self.display_rows {
-                    if let DisplayRow::GroupHeader { name: n, collapsed: c, .. } = row {
-                        if *n == name {
+                    if let DisplayRow::GroupHeader {
+                        name: n,
+                        collapsed: c,
+                        ..
+                    } = row
+                        && *n == name {
                             *c = false;
                             break;
                         }
-                    }
                 }
                 self.rebuild_display_rows();
             }
-        }
     }
 
     /// Collapse the group at cursor (or the group containing the current port)
@@ -252,23 +256,23 @@ impl App {
         };
 
         for row in &mut self.display_rows {
-            if let DisplayRow::GroupHeader { name, collapsed, .. } = row {
-                if *name == group_name {
+            if let DisplayRow::GroupHeader {
+                name, collapsed, ..
+            } = row
+                && *name == group_name {
                     *collapsed = true;
                     break;
                 }
-            }
         }
         self.rebuild_display_rows();
 
         // Move cursor to the group header
         for (i, row) in self.display_rows.iter().enumerate() {
-            if let DisplayRow::GroupHeader { name, .. } = row {
-                if *name == group_name {
+            if let DisplayRow::GroupHeader { name, .. } = row
+                && *name == group_name {
                     self.selected = i;
                     return;
                 }
-            }
         }
     }
 
@@ -277,12 +281,11 @@ impl App {
     }
 
     pub fn clear_stale_status(&mut self) -> bool {
-        if let Some((_, time)) = &self.status_message {
-            if time.elapsed() > std::time::Duration::from_secs(3) {
+        if let Some((_, time)) = &self.status_message
+            && time.elapsed() > std::time::Duration::from_secs(3) {
                 self.status_message = None;
                 return true;
             }
-        }
         false
     }
 
@@ -389,12 +392,16 @@ impl App {
                 SortColumn::Cpu => {
                     let a_cpu = a.cpu_usage.unwrap_or(0.0);
                     let b_cpu = b.cpu_usage.unwrap_or(0.0);
-                    a_cpu.partial_cmp(&b_cpu).unwrap_or(std::cmp::Ordering::Equal)
+                    a_cpu
+                        .partial_cmp(&b_cpu)
+                        .unwrap_or(std::cmp::Ordering::Equal)
                 }
                 SortColumn::Memory => {
                     let a_mem = a.memory_mb.unwrap_or(0.0);
                     let b_mem = b.memory_mb.unwrap_or(0.0);
-                    a_mem.partial_cmp(&b_mem).unwrap_or(std::cmp::Ordering::Equal)
+                    a_mem
+                        .partial_cmp(&b_mem)
+                        .unwrap_or(std::cmp::Ordering::Equal)
                 }
             };
             if ascending { cmp } else { cmp.reverse() }
@@ -534,20 +541,18 @@ impl App {
         }
 
         // 3. IDE/app with workspace name in tech label — e.g. "Cursor (navaris)" → "navaris"
-        if let Some(tech) = &entry.tech {
-            if let Some(project) = extract_parens_project(&tech.name) {
+        if let Some(tech) = &entry.tech
+            && let Some(project) = extract_parens_project(&tech.name) {
                 return project;
             }
-        }
 
         // 4. Working directory
         if let Some(dir) = &entry.working_dir {
             let s = dir.display().to_string();
-            if s != "/" {
-                if let Some(name) = dir.file_name() {
+            if s != "/"
+                && let Some(name) = dir.file_name() {
                     return name.to_string_lossy().to_string();
                 }
-            }
         }
 
         // 5. Group by process name for known apps (Postman, Zed, etc.)

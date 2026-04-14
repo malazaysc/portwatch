@@ -11,13 +11,12 @@ pub fn kill_process(entry: &PortEntry) -> Result<()> {
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         if stderr.contains("Operation not permitted") || stderr.contains("Not permitted") {
-            anyhow::bail!("Permission denied — PID {} is owned by another user", entry.pid);
+            anyhow::bail!(
+                "Permission denied — PID {} is owned by another user",
+                entry.pid
+            );
         }
-        anyhow::bail!(
-            "Failed to kill PID {}: {}",
-            entry.pid,
-            stderr.trim()
-        );
+        anyhow::bail!("Failed to kill PID {}: {}", entry.pid, stderr.trim());
     }
     Ok(())
 }
@@ -171,9 +170,7 @@ pub fn copy_url_to_clipboard(entry: &PortEntry) -> Result<()> {
                 .arg("--clipboard")
                 .stdin(std::process::Stdio::piped())
                 .spawn()
-                .context(
-                    "Failed to copy to clipboard — install xclip or xsel",
-                )?,
+                .context("Failed to copy to clipboard — install xclip or xsel")?,
         };
 
         use std::io::Write;

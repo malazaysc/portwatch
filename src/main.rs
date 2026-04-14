@@ -9,16 +9,16 @@ mod scanner;
 mod types;
 mod ui;
 
-use app::App;
 use anyhow::Result;
+use app::App;
 use clap::Parser;
 use crossterm::{
     event::{self, Event, KeyCode, KeyModifiers},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
+use ratatui::backend::CrosstermBackend;
 use std::io;
 use std::time::{Duration, Instant};
 
@@ -104,8 +104,8 @@ fn run_app(
 
         // Wait for input — sleep up to 200ms so we stay idle when nothing happens,
         // but wake up fast enough to pick up scan results and status clears
-        if event::poll(Duration::from_millis(200))? {
-            if let Event::Key(key) = event::read()? {
+        if event::poll(Duration::from_millis(200))?
+            && let Event::Key(key) = event::read()? {
                 needs_redraw = true;
                 if app.filter_active {
                     handle_filter_key(&mut app, key.code);
@@ -122,7 +122,6 @@ fn run_app(
                     handle_key(&mut app, key.code, key.modifiers, terminal_setting);
                 }
             }
-        }
 
         // Trigger periodic background refresh
         if last_refresh.elapsed() >= refresh_interval {

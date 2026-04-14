@@ -17,11 +17,10 @@ pub fn detect(command_line: &str, working_dir: Option<&Path>) -> Option<TechInfo
         let path = Path::new(arg);
 
         // Try absolute path first
-        if path.is_absolute() {
-            if let Some(info) = find_package_json_up(path) {
+        if path.is_absolute()
+            && let Some(info) = find_package_json_up(path) {
                 return Some(info);
             }
-        }
 
         // Resolve relative path against working directory
         if let Some(cwd) = working_dir {
@@ -52,7 +51,7 @@ fn find_package_json_up(script_path: &Path) -> Option<TechInfo> {
         }
 
         // Stop if we've hit the node_modules boundary
-        if dir.file_name().map_or(false, |n| n == "node_modules") {
+        if dir.file_name().is_some_and(|n| n == "node_modules") {
             break;
         }
 

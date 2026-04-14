@@ -10,9 +10,9 @@ pub fn draw(frame: &mut Frame, app: &App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Min(8),         // port list
-            Constraint::Length(10),      // detail view
-            Constraint::Length(3),       // action bar
+            Constraint::Min(8),     // port list
+            Constraint::Length(10), // detail view
+            Constraint::Length(3),  // action bar
         ])
         .split(frame.area());
 
@@ -83,7 +83,10 @@ fn draw_kill_confirm(frame: &mut Frame, app: &App) {
 
     let entry = app.selected_entry();
     let msg = if let Some(e) = entry {
-        format!("Kill {} (PID {}) on port {}?", e.process_name, e.pid, e.port)
+        format!(
+            "Kill {} (PID {}) on port {}?",
+            e.process_name, e.pid, e.port
+        )
     } else {
         "No process selected".to_string()
     };
@@ -107,7 +110,11 @@ fn draw_kill_confirm(frame: &mut Frame, app: &App) {
     frame.render_widget(paragraph, area);
 }
 
-fn centered_rect(percent_x: u16, percent_y: u16, area: ratatui::layout::Rect) -> ratatui::layout::Rect {
+fn centered_rect(
+    percent_x: u16,
+    percent_y: u16,
+    area: ratatui::layout::Rect,
+) -> ratatui::layout::Rect {
     let popup_layout = Layout::default()
         .direction(Direction::Vertical)
         .constraints([

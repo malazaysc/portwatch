@@ -1,6 +1,6 @@
 use crate::types::PortEntry;
-use sysinfo::{Pid, ProcessesToUpdate, System};
 use std::time::Duration;
+use sysinfo::{Pid, ProcessesToUpdate, System};
 
 /// Collect CPU and memory usage for each PortEntry by PID.
 ///
@@ -12,10 +12,7 @@ pub fn collect_resources(entries: &mut [PortEntry]) {
         return;
     }
 
-    let pids: Vec<Pid> = entries
-        .iter()
-        .map(|e| Pid::from_u32(e.pid))
-        .collect();
+    let pids: Vec<Pid> = entries.iter().map(|e| Pid::from_u32(e.pid)).collect();
 
     let mut system = System::new();
 
