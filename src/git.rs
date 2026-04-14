@@ -10,9 +10,10 @@ pub fn batch_detect(entries: &mut [crate::types::PortEntry]) {
     let mut dirs: Vec<PathBuf> = Vec::new();
     for entry in entries.iter() {
         if let Some(dir) = &entry.working_dir
-            && !dirs.contains(dir) {
-                dirs.push(dir.clone());
-            }
+            && !dirs.contains(dir)
+        {
+            dirs.push(dir.clone());
+        }
     }
 
     // Detect git info for each unique directory
@@ -24,9 +25,10 @@ pub fn batch_detect(entries: &mut [crate::types::PortEntry]) {
     // Apply results
     for entry in entries.iter_mut() {
         if let Some(dir) = &entry.working_dir
-            && let Some(info) = cache.get(dir) {
-                entry.git_info = info.clone();
-            }
+            && let Some(info) = cache.get(dir)
+        {
+            entry.git_info = info.clone();
+        }
     }
 }
 

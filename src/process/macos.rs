@@ -100,12 +100,13 @@ fn batch_cwd_lookup(pid_list: &str) -> HashMap<u32, PathBuf> {
         } else if let Some(fd) = line.strip_prefix('f') {
             current_fd_is_cwd = fd == "cwd";
         } else if let Some(path) = line.strip_prefix('n')
-            && current_fd_is_cwd {
-                if let Some(pid) = current_pid {
-                    map.insert(pid, PathBuf::from(path));
-                }
-                current_fd_is_cwd = false;
+            && current_fd_is_cwd
+        {
+            if let Some(pid) = current_pid {
+                map.insert(pid, PathBuf::from(path));
             }
+            current_fd_is_cwd = false;
+        }
     }
 
     map

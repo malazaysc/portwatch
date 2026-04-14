@@ -162,8 +162,9 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
 
 fn shorten_path(path: &std::path::Path) -> String {
     if let Some(home) = dirs::home_dir()
-        && let Ok(stripped) = path.strip_prefix(&home) {
-            return format!("~/{}", stripped.display());
-        }
+        && let Ok(stripped) = path.strip_prefix(&home)
+    {
+        return format!("~/{}", stripped.display());
+    }
     path.display().to_string()
 }

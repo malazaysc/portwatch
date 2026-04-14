@@ -65,9 +65,10 @@ pub fn detect_docker_ports() -> HashMap<u16, DockerInfo> {
 fn extract_label(labels: &str, key: &str) -> Option<String> {
     for pair in labels.split(',') {
         if let Some((k, v)) = pair.split_once('=')
-            && k.trim() == key {
-                return Some(v.trim().to_string());
-            }
+            && k.trim() == key
+        {
+            return Some(v.trim().to_string());
+        }
     }
     None
 }

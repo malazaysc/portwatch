@@ -18,9 +18,10 @@ pub fn detect(command_line: &str, working_dir: Option<&Path>) -> Option<TechInfo
 
         // Try absolute path first
         if path.is_absolute()
-            && let Some(info) = find_package_json_up(path) {
-                return Some(info);
-            }
+            && let Some(info) = find_package_json_up(path)
+        {
+            return Some(info);
+        }
 
         // Resolve relative path against working directory
         if let Some(cwd) = working_dir {

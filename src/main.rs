@@ -105,23 +105,24 @@ fn run_app(
         // Wait for input — sleep up to 200ms so we stay idle when nothing happens,
         // but wake up fast enough to pick up scan results and status clears
         if event::poll(Duration::from_millis(200))?
-            && let Event::Key(key) = event::read()? {
-                needs_redraw = true;
-                if app.filter_active {
-                    handle_filter_key(&mut app, key.code);
-                } else if app.confirm_kill {
-                    handle_kill_confirm(&mut app, key.code);
-                } else if app.show_help {
-                    match key.code {
-                        KeyCode::Char('?') | KeyCode::Esc | KeyCode::Char('q') => {
-                            app.show_help = false;
-                        }
-                        _ => {}
+            && let Event::Key(key) = event::read()?
+        {
+            needs_redraw = true;
+            if app.filter_active {
+                handle_filter_key(&mut app, key.code);
+            } else if app.confirm_kill {
+                handle_kill_confirm(&mut app, key.code);
+            } else if app.show_help {
+                match key.code {
+                    KeyCode::Char('?') | KeyCode::Esc | KeyCode::Char('q') => {
+                        app.show_help = false;
                     }
-                } else {
-                    handle_key(&mut app, key.code, key.modifiers, terminal_setting);
+                    _ => {}
                 }
+            } else {
+                handle_key(&mut app, key.code, key.modifiers, terminal_setting);
             }
+        }
 
         // Trigger periodic background refresh
         if last_refresh.elapsed() >= refresh_interval {
