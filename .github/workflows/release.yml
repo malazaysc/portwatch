@@ -81,3 +81,42 @@ jobs:
             portwatch-macos-aarch64.tar.gz
             portwatch-linux-x86_64.tar.gz
             portwatch-linux-aarch64.tar.gz
+
+      - name: Update Homebrew formula
+        run: |
+          SHA_MACOS_ARM=$(shasum -a 256 portwatch-macos-aarch64.tar.gz | cut -d' ' -f1)
+          SHA_MACOS_X86=$(shasum -a 256 portwatch-macos-x86_64.tar.gz | cut -d' ' -f1)
+          SHA_LINUX_ARM=$(shasum -a 256 portwatch-linux-aarch64.tar.gz | cut -d' ' -f1)
+          SHA_LINUX_X86=$(shasum -a 256 portwatch-linux-x86_64.tar.gz | cut -d' ' -f1)
+          VERSION=${GITHUB_REF_NAME#v}
+
+          sed -i "s/version \".*\"/version \"${VERSION}\"/" Formula/portwatch.rb
+
+          # Update SHA256 hashes in order: arm mac, x86 mac, arm linux, x86 linux
+          python3 -c "
+          import re
+          with open('Formula/portwatch.rb') as f:
+              content = f.read()
+          placeholders = re.findall(r'sha256 \"[^\"]+\"', content)
+          replacements = [
+              'sha256 \"${SHA_MACOS_ARM}\"',
+              'sha256 \"${SHA_MACOS_X86}\"',
+              'sha256 \"${SHA_LINUX_ARM}\"',
+              'sha256 \"${SHA_LINUX_X86}\"',
+          ]
+          for old, new in zip(placeholders, replacements):
+              content = content.replace(old, new, 1)
+          with open('Formula/portwatch.rb', 'w') as f:
+              f.write(content)
+          "
+
+          # Expand shell variables in the file
+          envsubst < Formula/portwatch.rb > Formula/portwatch.rb.tmp
+          mv Formula/portwatch.rb.tmp Formula/portwatch.rb
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout master
+          git add Formula/portwatch.rb
+          git commit -m "chore: update Homebrew formula for v${VERSION}" || true
+          git push origin master
