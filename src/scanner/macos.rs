@@ -90,18 +90,18 @@ fn unescape_lsof(s: &str) -> String {
             let mut peek: Vec<char> = Vec::new();
             if let Some(c2) = chars.next() {
                 peek.push(c2);
-                if c2 == 'x' {
-                    if let (Some(h1), Some(h2)) = (chars.next(), chars.next()) {
-                        if let Ok(byte) = u8::from_str_radix(&format!("{h1}{h2}"), 16) {
-                            result.push(byte as char);
-                            continue;
-                        }
-                        result.push(c);
-                        result.push(c2);
-                        result.push(h1);
-                        result.push(h2);
+                if c2 == 'x'
+                    && let (Some(h1), Some(h2)) = (chars.next(), chars.next())
+                {
+                    if let Ok(byte) = u8::from_str_radix(&format!("{h1}{h2}"), 16) {
+                        result.push(byte as char);
                         continue;
                     }
+                    result.push(c);
+                    result.push(c2);
+                    result.push(h1);
+                    result.push(h2);
+                    continue;
                 }
             }
             result.push(c);

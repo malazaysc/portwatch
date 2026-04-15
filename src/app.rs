@@ -355,15 +355,15 @@ impl App {
             let elapsed = now.duration_since(prev_time).as_secs_f64();
             if elapsed > 0.0 {
                 for entry in entries.iter_mut() {
-                    if let (Some(rx), Some(tx)) = (entry.net_rx_bytes, entry.net_tx_bytes) {
-                        if let Some(&(prev_rx, prev_tx)) = self.prev_net.get(&entry.pid) {
-                            let rx_rate = rx.saturating_sub(prev_rx) as f64 / elapsed;
-                            let tx_rate = tx.saturating_sub(prev_tx) as f64 / elapsed;
-                            entry.net_rx_rate = Some(rx_rate as u64);
-                            entry.net_tx_rate = Some(tx_rate as u64);
-                            total_rx_rate += rx_rate as u64;
-                            total_tx_rate += tx_rate as u64;
-                        }
+                    if let (Some(rx), Some(tx)) = (entry.net_rx_bytes, entry.net_tx_bytes)
+                        && let Some(&(prev_rx, prev_tx)) = self.prev_net.get(&entry.pid)
+                    {
+                        let rx_rate = rx.saturating_sub(prev_rx) as f64 / elapsed;
+                        let tx_rate = tx.saturating_sub(prev_tx) as f64 / elapsed;
+                        entry.net_rx_rate = Some(rx_rate as u64);
+                        entry.net_tx_rate = Some(tx_rate as u64);
+                        total_rx_rate += rx_rate as u64;
+                        total_tx_rate += tx_rate as u64;
                     }
                 }
             }
