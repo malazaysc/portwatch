@@ -145,7 +145,7 @@ fn handle_filter_key(app: &mut App, code: KeyCode) {
     }
 }
 
-fn handle_key(app: &mut App, code: KeyCode, modifiers: KeyModifiers, terminal_setting: &str) {
+fn handle_key(app: &mut App, code: KeyCode, modifiers: KeyModifiers, _terminal_setting: &str) {
     match code {
         KeyCode::Char('q') | KeyCode::Esc => app.should_quit = true,
         KeyCode::Char('c') if modifiers.contains(KeyModifiers::CONTROL) => app.should_quit = true,
@@ -177,20 +177,23 @@ fn handle_key(app: &mut App, code: KeyCode, modifiers: KeyModifiers, terminal_se
                 }
             }
         }
-        KeyCode::Char('f') => {
-            if let Some(entry) = app.selected_entry() {
-                let entry = entry.clone();
-                match actions::open_folder(&entry, terminal_setting) {
-                    Ok(()) => app.set_status("Opened folder".to_string()),
-                    Err(e) => app.set_status(format!("Error: {e}")),
-                }
-            }
-        }
         KeyCode::Char('c') => {
             if let Some(entry) = app.selected_entry() {
                 let entry = entry.clone();
                 match actions::copy_url_to_clipboard(&entry) {
                     Ok(()) => app.set_status(format!("Copied http://localhost:{}", entry.port)),
+                    Err(e) => app.set_status(format!("Error: {e}")),
+                }
+            }
+        }
+        KeyCode::Char('d') => {
+            if let Some(entry) = app.selected_entry() {
+                let entry = entry.clone();
+                match actions::copy_dir_to_clipboard(&entry) {
+                    Ok(()) => {
+                        let dir = entry.working_dir.as_ref().unwrap();
+                        app.set_status(format!("Copied {}", dir.display()));
+                    }
                     Err(e) => app.set_status(format!("Error: {e}")),
                 }
             }

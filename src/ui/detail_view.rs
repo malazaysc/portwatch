@@ -148,6 +148,24 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
             ]));
         }
 
+        // Network I/O
+        if entry.net_rx_rate.is_some() || entry.net_tx_rate.is_some() {
+            let rx = format_bytes(entry.net_rx_rate.unwrap_or(0));
+            let tx = format_bytes(entry.net_tx_rate.unwrap_or(0));
+            lines.push(Line::from(vec![
+                Span::styled("  Net:   ", Style::default().fg(Color::DarkGray)),
+                Span::styled(
+                    format!("\u{2193}{rx}/s"),
+                    Style::default().fg(Color::Green),
+                ),
+                Span::styled("  ", Style::default()),
+                Span::styled(
+                    format!("\u{2191}{tx}/s"),
+                    Style::default().fg(Color::Cyan),
+                ),
+            ]));
+        }
+
         lines
     } else {
         vec![Line::from(Span::styled(
@@ -158,6 +176,22 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
 
     let paragraph = Paragraph::new(content).block(block);
     frame.render_widget(paragraph, area);
+}
+
+fn format_bytes(bytes: u64) -> String {
+    const KB: u64 = 1024;
+    const MB: u64 = 1024 * 1024;
+    const GB: u64 = 1024 * 1024 * 1024;
+
+    if bytes >= GB {
+        format!("{:.1} GB", bytes as f64 / GB as f64)
+    } else if bytes >= MB {
+        format!("{:.1} MB", bytes as f64 / MB as f64)
+    } else if bytes >= KB {
+        format!("{:.1} KB", bytes as f64 / KB as f64)
+    } else {
+        format!("{bytes} B")
+    }
 }
 
 fn shorten_path(path: &std::path::Path) -> String {

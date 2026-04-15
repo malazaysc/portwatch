@@ -26,7 +26,7 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
             n += 2;
         }
         if is_extra_wide {
-            n += 2;
+            n += 3;
         }
         if is_wide {
             n += 1;
@@ -75,6 +75,13 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
                     Style::default()
                 };
 
+                let is_selected = i == app.selected;
+                let dim = if is_selected {
+                    Style::default().fg(Color::Gray)
+                } else {
+                    Style::default().fg(Color::DarkGray)
+                };
+
                 let exposure_indicator = match &entry.bind_address {
                     BindAddress::Local => {
                         Span::styled("\u{25cf}", Style::default().fg(Color::Green))
@@ -121,10 +128,7 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
 
                 if is_medium {
                     cells.push(ratatui::text::Text::raw(dir_display));
-                    cells.push(ratatui::text::Text::styled(
-                        uptime,
-                        Style::default().fg(Color::DarkGray),
-                    ));
+                    cells.push(ratatui::text::Text::styled(uptime, dim));
                 }
 
                 if is_extra_wide {
@@ -132,20 +136,22 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
                         .cpu_usage
                         .map(|c| format!("{:.1}%", c))
                         .unwrap_or_else(|| "\u{2014}".to_string());
-                    cells.push(ratatui::text::Text::styled(
-                        cpu_str,
-                        Style::default().fg(Color::DarkGray),
-                    ));
+                    cells.push(ratatui::text::Text::styled(cpu_str, dim));
 
                     let mem_str = match entry.memory_mb {
                         Some(mb) if mb >= 1024.0 => format!("{:.1}G", mb / 1024.0),
                         Some(mb) => format!("{:.1}M", mb),
                         None => "\u{2014}".to_string(),
                     };
-                    cells.push(ratatui::text::Text::styled(
-                        mem_str,
-                        Style::default().fg(Color::DarkGray),
-                    ));
+                    cells.push(ratatui::text::Text::styled(mem_str, dim));
+
+                    let net_str = match (entry.net_rx_rate, entry.net_tx_rate) {
+                        (Some(rx), Some(tx)) => {
+                            format!("\u{2193}{} \u{2191}{}", format_rate(rx), format_rate(tx))
+                        }
+                        _ => "\u{2014}".to_string(),
+                    };
+                    cells.push(ratatui::text::Text::styled(net_str, dim));
                 }
 
                 if is_wide {
@@ -219,6 +225,7 @@ fn build_header(app: &App, is_extra_wide: bool, is_wide: bool, is_medium: bool) 
     if is_extra_wide {
         h.push(decorate(SortColumn::Cpu, "CPU%"));
         h.push(decorate(SortColumn::Memory, "MEM"));
+        h.push("NET".to_string());
     }
     if is_wide {
         h.push("PID".to_string());
@@ -234,17 +241,18 @@ fn build_widths(
 ) -> Vec<ratatui::layout::Constraint> {
     use ratatui::layout::Constraint;
     let mut w = vec![
-        Constraint::Length(10),
-        Constraint::Length(14),
-        Constraint::Length(16),
+        Constraint::Fill(1),
+        Constraint::Fill(2),
+        Constraint::Fill(2),
     ];
     if is_medium {
-        w.push(Constraint::Min(20));
+        w.push(Constraint::Fill(3));
         w.push(Constraint::Length(10));
     }
     if is_extra_wide {
         w.push(Constraint::Length(8));
         w.push(Constraint::Length(8));
+        w.push(Constraint::Length(16));
     }
     if is_wide {
         w.push(Constraint::Length(8));
@@ -286,6 +294,19 @@ fn tech_color(tech: &str) -> Style {
         _ => Color::White,
     };
     Style::default().fg(color)
+}
+
+fn format_rate(bytes_per_sec: u64) -> String {
+    const KB: u64 = 1024;
+    const MB: u64 = 1024 * 1024;
+
+    if bytes_per_sec >= MB {
+        format!("{:.1}M", bytes_per_sec as f64 / MB as f64)
+    } else if bytes_per_sec >= KB {
+        format!("{:.0}K", bytes_per_sec as f64 / KB as f64)
+    } else {
+        format!("{bytes_per_sec}B")
+    }
 }
 
 fn shorten_path(path: &std::path::Path) -> String {

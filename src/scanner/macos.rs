@@ -34,7 +34,7 @@ impl MacOsScanner {
             return None;
         }
 
-        let process_name = fields[0].to_string();
+        let process_name = unescape_lsof(fields[0]);
         let pid: u32 = fields[1].parse().ok()?;
         let user = fields[2].to_string();
         let is_own = user == self.current_user;
@@ -72,15 +72,53 @@ impl MacOsScanner {
             docker_info: None,
             cpu_usage: None,
             memory_mb: None,
+            net_rx_bytes: None,
+            net_tx_bytes: None,
+            net_rx_rate: None,
+            net_tx_rate: None,
             protocol,
         })
     }
 }
 
+/// Unescape `\xNN` hex sequences that lsof uses for special characters (e.g. spaces).
+fn unescape_lsof(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    let mut chars = s.chars();
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            let mut peek: Vec<char> = Vec::new();
+            if let Some(c2) = chars.next() {
+                peek.push(c2);
+                if c2 == 'x' {
+                    if let (Some(h1), Some(h2)) = (chars.next(), chars.next()) {
+                        if let Ok(byte) = u8::from_str_radix(&format!("{h1}{h2}"), 16) {
+                            result.push(byte as char);
+                            continue;
+                        }
+                        result.push(c);
+                        result.push(c2);
+                        result.push(h1);
+                        result.push(h2);
+                        continue;
+                    }
+                }
+            }
+            result.push(c);
+            for p in peek {
+                result.push(p);
+            }
+        } else {
+            result.push(c);
+        }
+    }
+    result
+}
+
 impl super::PortScanner for MacOsScanner {
     fn scan(&self) -> Result<Vec<PortEntry>> {
         let output = Command::new("lsof")
-            .args(["-iTCP", "-sTCP:LISTEN", "-P", "-n"])
+            .args(["-iTCP", "-sTCP:LISTEN", "-P", "-n", "+c", "0"])
             .output()
             .context("Failed to run lsof — are you on macOS?")?;
 

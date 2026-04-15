@@ -21,14 +21,20 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
     } else if let Some((msg, _)) = &app.status_message {
         spans.push(Span::styled(msg, Style::default().fg(Color::Yellow)));
     } else {
+        let selected = app.selected_entry();
+        let has_dir = selected.is_some_and(|e| e.working_dir.is_some());
+
         spans.extend([
             key_hint("x", "kill"),
             Span::raw("  "),
             key_hint("b", "browser"),
             Span::raw("  "),
-            key_hint("f", "folder"),
-            Span::raw("  "),
             key_hint("c", "copy url"),
+        ]);
+        if has_dir {
+            spans.extend([Span::raw("  "), key_hint("d", "copy dir")]);
+        }
+        spans.extend([
             Span::raw("  "),
             key_hint("r", "refresh"),
             Span::raw("  "),

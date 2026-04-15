@@ -99,6 +99,10 @@ impl LinuxScanner {
             docker_info: None,
             cpu_usage: None,
             memory_mb: None,
+            net_rx_bytes: None,
+            net_tx_bytes: None,
+            net_rx_rate: None,
+            net_tx_rate: None,
             protocol,
         })
     }

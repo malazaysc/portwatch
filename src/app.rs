@@ -3,7 +3,8 @@ use crate::git;
 use crate::process;
 use crate::resources;
 use crate::scanner;
-use crate::types::{DetectionSource, PortEntry, TechInfo};
+use crate::types::{DetectionSource, NetworkStats, PortEntry, TechInfo};
+use std::collections::HashMap;
 use std::sync::mpsc;
 use std::time::Instant;
 
@@ -67,6 +68,9 @@ pub struct App {
     pub filter_active: bool,
     pub sort_column: SortColumn,
     pub sort_ascending: bool,
+    pub network_stats: NetworkStats,
+    prev_net: HashMap<u32, (u64, u64)>,
+    prev_net_time: Option<Instant>,
     rx: mpsc::Receiver<ScanResult>,
     scan_trigger: mpsc::Sender<()>,
 }
@@ -118,7 +122,7 @@ impl App {
                             }
                         }
 
-                        // Collect per-process CPU and memory usage
+                        // Collect per-process CPU, memory, and network I/O
                         resources::collect_resources(&mut entries);
 
                         ScanResult::Data(entries)
@@ -146,6 +150,9 @@ impl App {
             filter_active: false,
             sort_column: SortColumn::Port,
             sort_ascending: true,
+            network_stats: NetworkStats::default(),
+            prev_net: HashMap::new(),
+            prev_net_time: None,
             rx: data_rx,
             scan_trigger: trigger_tx,
         };
@@ -163,7 +170,9 @@ impl App {
 
     pub fn poll_results(&mut self) -> bool {
         match self.rx.try_recv() {
-            Ok(ScanResult::Data(entries)) => {
+            Ok(ScanResult::Data(mut entries)) => {
+                let now = Instant::now();
+                self.compute_net_rates(&mut entries, now);
                 self.all_ports = entries;
                 self.scanning = false;
                 self.apply_filter_and_sort();
@@ -335,6 +344,45 @@ impl App {
     }
 
     // --- Internal ---
+
+    /// Compute per-process network rates from cumulative byte deltas,
+    /// and update the aggregate NetworkStats for the status bar.
+    fn compute_net_rates(&mut self, entries: &mut [PortEntry], now: Instant) {
+        let mut total_rx_rate: u64 = 0;
+        let mut total_tx_rate: u64 = 0;
+
+        if let Some(prev_time) = self.prev_net_time {
+            let elapsed = now.duration_since(prev_time).as_secs_f64();
+            if elapsed > 0.0 {
+                for entry in entries.iter_mut() {
+                    if let (Some(rx), Some(tx)) = (entry.net_rx_bytes, entry.net_tx_bytes) {
+                        if let Some(&(prev_rx, prev_tx)) = self.prev_net.get(&entry.pid) {
+                            let rx_rate = rx.saturating_sub(prev_rx) as f64 / elapsed;
+                            let tx_rate = tx.saturating_sub(prev_tx) as f64 / elapsed;
+                            entry.net_rx_rate = Some(rx_rate as u64);
+                            entry.net_tx_rate = Some(tx_rate as u64);
+                            total_rx_rate += rx_rate as u64;
+                            total_tx_rate += tx_rate as u64;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Store current readings for next delta
+        self.prev_net.clear();
+        for entry in entries.iter() {
+            if let (Some(rx), Some(tx)) = (entry.net_rx_bytes, entry.net_tx_bytes) {
+                self.prev_net.insert(entry.pid, (rx, tx));
+            }
+        }
+        self.prev_net_time = Some(now);
+
+        self.network_stats = NetworkStats {
+            rx_bytes_per_sec: total_rx_rate,
+            tx_bytes_per_sec: total_tx_rate,
+        };
+    }
 
     fn apply_filter_and_sort(&mut self) {
         let filter = self.filter_text.to_lowercase();

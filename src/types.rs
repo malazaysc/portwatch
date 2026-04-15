@@ -24,6 +24,10 @@ pub struct PortEntry {
     pub docker_info: Option<DockerInfo>,
     pub cpu_usage: Option<f32>,
     pub memory_mb: Option<f64>,
+    pub net_rx_bytes: Option<u64>,
+    pub net_tx_bytes: Option<u64>,
+    pub net_rx_rate: Option<u64>,
+    pub net_tx_rate: Option<u64>,
     #[allow(dead_code)]
     pub protocol: Protocol,
 }
@@ -89,6 +93,12 @@ impl fmt::Display for Protocol {
             Protocol::Tcp6 => write!(f, "TCP6"),
         }
     }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct NetworkStats {
+    pub rx_bytes_per_sec: u64,
+    pub tx_bytes_per_sec: u64,
 }
 
 pub fn format_uptime(duration: &std::time::Duration) -> String {

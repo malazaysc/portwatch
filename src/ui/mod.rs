@@ -1,6 +1,7 @@
 mod action_bar;
 mod detail_view;
 mod port_list;
+mod status_bar;
 
 use crate::app::App;
 use ratatui::Frame;
@@ -11,14 +12,16 @@ pub fn draw(frame: &mut Frame, app: &App) {
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Min(8),     // port list
+            Constraint::Length(1),  // status bar
             Constraint::Length(10), // detail view
             Constraint::Length(3),  // action bar
         ])
         .split(frame.area());
 
     port_list::draw(frame, app, chunks[0]);
-    detail_view::draw(frame, app, chunks[1]);
-    action_bar::draw(frame, app, chunks[2]);
+    status_bar::draw(frame, app, chunks[1]);
+    detail_view::draw(frame, app, chunks[2]);
+    action_bar::draw(frame, app, chunks[3]);
 
     if app.show_help {
         draw_help_popup(frame);
@@ -47,8 +50,8 @@ fn draw_help_popup(frame: &mut Frame) {
         Line::from("Actions"),
         Line::from("  x            Kill process"),
         Line::from("  b            Open in browser"),
-        Line::from("  f            Open folder"),
         Line::from("  c            Copy URL"),
+        Line::from("  d            Copy directory path"),
         Line::from("  r            Refresh"),
         Line::from(""),
         Line::from("Filter & Sort"),
