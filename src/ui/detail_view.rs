@@ -154,15 +154,9 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
             let tx = format_bytes(entry.net_tx_rate.unwrap_or(0));
             lines.push(Line::from(vec![
                 Span::styled("  Net:   ", Style::default().fg(Color::DarkGray)),
-                Span::styled(
-                    format!("\u{2193}{rx}/s"),
-                    Style::default().fg(Color::Green),
-                ),
+                Span::styled(format!("\u{2193}{rx}/s"), Style::default().fg(Color::Green)),
                 Span::styled("  ", Style::default()),
-                Span::styled(
-                    format!("\u{2191}{tx}/s"),
-                    Style::default().fg(Color::Cyan),
-                ),
+                Span::styled(format!("\u{2191}{tx}/s"), Style::default().fg(Color::Cyan)),
             ]));
         }
 

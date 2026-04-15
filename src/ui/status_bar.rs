@@ -32,9 +32,15 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
         Span::styled("  \u{2502}  MEM: ", dim),
         Span::styled(mem_str, val),
         Span::styled("  \u{2502}  NET: ", dim),
-        Span::styled(format!("\u{2193}{rx_str}"), Style::default().fg(Color::Green)),
+        Span::styled(
+            format!("\u{2193}{rx_str}"),
+            Style::default().fg(Color::Green),
+        ),
         Span::styled(" ", dim),
-        Span::styled(format!("\u{2191}{tx_str}"), Style::default().fg(Color::Cyan)),
+        Span::styled(
+            format!("\u{2191}{tx_str}"),
+            Style::default().fg(Color::Cyan),
+        ),
     ]);
 
     let paragraph = Paragraph::new(line).alignment(Alignment::Left);
