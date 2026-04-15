@@ -85,8 +85,7 @@ cargo install --git https://github.com/malazaysc/portwatch.git
 ```bash
 git clone https://github.com/malazaysc/portwatch.git
 cd portwatch
-cargo build --release
-./target/release/portwatch
+cargo install --path .
 ```
 
 ## Usage
@@ -138,6 +137,8 @@ CLI flags override config file values.
 | macOS (Intel)  | Supported |
 | Linux (x86_64) | Supported |
 | Linux (ARM)    | Supported |
+
+> **Note:** portwatch is primarily developed and tested on macOS. It builds and runs on Linux, but Linux support has not been thoroughly tested — some features (e.g., network I/O tracking) may not work as expected. Bug reports welcome!
 
 ## License
 
