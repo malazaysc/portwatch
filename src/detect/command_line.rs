@@ -29,7 +29,7 @@ pub fn detect(command_line: &str) -> Option<TechInfo> {
             "FastAPI"
         } else if cmd.contains("gunicorn") {
             "Gunicorn"
-        } else if cmd.contains("rails") && (cmd.contains("server") || cmd.contains("s")) {
+        } else if cmd.contains("rails server") || cmd.contains("rails s ") {
             "Rails"
         } else if cmd.contains("puma") {
             "Puma (Ruby)"

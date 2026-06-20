@@ -39,6 +39,20 @@ pub enum BindAddress {
     Specific(String), // bound to a specific interface IP
 }
 
+impl BindAddress {
+    /// Rank a bind by how widely reachable it is. Higher = more exposed.
+    /// Used to merge duplicate sockets on the same port so we never
+    /// under-report exposure (a process may listen on both 127.0.0.1 and
+    /// 0.0.0.0 — we must surface the exposed one).
+    pub fn exposure_rank(&self) -> u8 {
+        match self {
+            BindAddress::Local => 0,
+            BindAddress::Specific(_) => 1,
+            BindAddress::Exposed => 2,
+        }
+    }
+}
+
 impl fmt::Display for BindAddress {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

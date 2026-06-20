@@ -95,16 +95,7 @@ fn calculate_uptime(pid: u32, boot_time_secs: Option<u64>, ticks_per_sec: u64) -
     let boot_time_secs = boot_time_secs?;
     let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
 
-    // /proc/PID/stat format: pid (comm) state ... field22_starttime ...
-    // The comm field can contain spaces and parentheses, so find the last ')' first
-    let after_comm = stat.find(')')? + 2; // skip ") "
-    let fields: Vec<&str> = stat[after_comm..].split_whitespace().collect();
-
-    // Field 22 (1-indexed) is starttime, but since we skipped pid and (comm),
-    // starttime is at index 19 (field 22 - 3 fields already consumed = field index 19)
-    // Actually: fields after comm start at field 3, so starttime (field 22) is at index 22-3 = 19
-    let starttime_ticks: u64 = fields.get(19)?.parse().ok()?;
-
+    let starttime_ticks = parse_starttime_ticks(&stat)?;
     let start_time_secs = boot_time_secs + starttime_ticks / ticks_per_sec;
 
     let now = std::time::SystemTime::now()
@@ -117,6 +108,19 @@ fn calculate_uptime(pid: u32, boot_time_secs: Option<u64>, ticks_per_sec: u64) -
     } else {
         Some(Duration::from_secs(0))
     }
+}
+
+/// Parse the `starttime` value (clock ticks since boot) from a `/proc/PID/stat`
+/// line.
+///
+/// Layout: `pid (comm) state ppid ... starttime ...`. `starttime` is field 22
+/// (1-indexed). The `comm` field can contain spaces and parentheses, so we split
+/// *after* the last ')'. The fields after `comm` begin at field 3, so the index
+/// into that slice is `22 - 3 = 19`.
+fn parse_starttime_ticks(stat: &str) -> Option<u64> {
+    let after_comm = stat.rfind(')')? + 2; // skip ") "
+    let fields: Vec<&str> = stat.get(after_comm..)?.split_whitespace().collect();
+    fields.get(19)?.parse().ok()
 }
 
 /// Get the username owning a process from /proc/PID/status
@@ -144,4 +148,37 @@ fn uid_to_username(uid: u32) -> Option<String> {
     }
     // Fallback: return the UID as a string
     Some(uid_str)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn starttime_simple() {
+        // Fields after "(comm) ": state(3) ... starttime is field 22 → index 19.
+        // Build a stat line where every field equals its 1-indexed position.
+        let after = (3..=24)
+            .map(|n| n.to_string())
+            .collect::<Vec<_>>()
+            .join(" ");
+        let stat = format!("1234 (node) {after}");
+        assert_eq!(parse_starttime_ticks(&stat), Some(22));
+    }
+
+    #[test]
+    fn starttime_comm_with_spaces_and_parens() {
+        // comm can contain spaces and parentheses; we must split after the LAST ')'.
+        let after = (3..=24)
+            .map(|n| n.to_string())
+            .collect::<Vec<_>>()
+            .join(" ");
+        let stat = format!("1234 (weird )(name) {after}");
+        assert_eq!(parse_starttime_ticks(&stat), Some(22));
+    }
+
+    #[test]
+    fn starttime_malformed() {
+        assert_eq!(parse_starttime_ticks("not a stat line"), None);
+    }
 }

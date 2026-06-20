@@ -41,7 +41,16 @@ fn cli_interval_was_provided() -> bool {
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
-    let cfg = config::load().unwrap_or_default();
+
+    // Load config; if it fails to parse, fall back to defaults but remember the
+    // error so we can surface it in the status bar once the TUI is up.
+    let (cfg, config_warning) = match config::load() {
+        Ok(cfg) => (cfg, None),
+        Err(e) => (
+            config::Config::default(),
+            Some(format!("config.toml ignored: {e}")),
+        ),
+    };
 
     // CLI --interval overrides config file when explicitly provided
     let refresh_secs = if cli_interval_was_provided() {
@@ -49,7 +58,6 @@ fn main() -> Result<()> {
     } else {
         cfg.refresh_interval
     };
-    let terminal_setting = cfg.terminal.clone();
 
     // Set up panic hook to restore terminal on crash
     let original_hook = std::panic::take_hook();
@@ -67,7 +75,7 @@ fn main() -> Result<()> {
     let mut terminal = Terminal::new(backend)?;
 
     // Run the app
-    let result = run_app(&mut terminal, refresh_secs, &terminal_setting);
+    let result = run_app(&mut terminal, refresh_secs, config_warning);
 
     // Restore terminal
     disable_raw_mode()?;
@@ -80,9 +88,12 @@ fn main() -> Result<()> {
 fn run_app(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     refresh_secs: u64,
-    terminal_setting: &str,
+    config_warning: Option<String>,
 ) -> Result<()> {
     let mut app = App::new();
+    if let Some(warning) = config_warning {
+        app.set_status(warning);
+    }
     let refresh_interval = Duration::from_secs(refresh_secs);
     let mut last_refresh = Instant::now();
     let mut needs_redraw = true;
@@ -120,7 +131,7 @@ fn run_app(
                     _ => {}
                 }
             } else {
-                handle_key(&mut app, key.code, key.modifiers, terminal_setting);
+                handle_key(&mut app, key.code, key.modifiers);
             }
         }
 
@@ -145,7 +156,7 @@ fn handle_filter_key(app: &mut App, code: KeyCode) {
     }
 }
 
-fn handle_key(app: &mut App, code: KeyCode, modifiers: KeyModifiers, _terminal_setting: &str) {
+fn handle_key(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
     match code {
         KeyCode::Char('q') | KeyCode::Esc => app.should_quit = true,
         KeyCode::Char('c') if modifiers.contains(KeyModifiers::CONTROL) => app.should_quit = true,
@@ -163,10 +174,8 @@ fn handle_key(app: &mut App, code: KeyCode, modifiers: KeyModifiers, _terminal_s
             app.request_refresh();
             app.set_status("Refreshing...".to_string());
         }
-        KeyCode::Char('x') => {
-            if app.selected_entry().is_some() {
-                app.confirm_kill = true;
-            }
+        KeyCode::Char('x') if app.selected_entry().is_some() => {
+            app.confirm_kill = true;
         }
         KeyCode::Char('b') => {
             if let Some(entry) = app.selected_entry() {

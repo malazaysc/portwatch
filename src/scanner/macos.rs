@@ -13,12 +13,18 @@ impl MacOsScanner {
     }
 
     fn parse_lsof_output(&self, output: &str) -> Vec<PortEntry> {
-        let mut entries = Vec::new();
+        let mut entries: Vec<PortEntry> = Vec::new();
 
         for line in output.lines().skip(1) {
             if let Some(entry) = self.parse_line(line) {
-                // Deduplicate by port — lsof can show multiple entries for the same port
-                if !entries.iter().any(|e: &PortEntry| e.port == entry.port) {
+                // Deduplicate by port — lsof can show multiple entries for the same
+                // port (e.g. IPv4 + IPv6, or 127.0.0.1 + 0.0.0.0). Keep one row, but
+                // escalate to the most-exposed bind so we never under-report exposure.
+                if let Some(existing) = entries.iter_mut().find(|e| e.port == entry.port) {
+                    if entry.bind_address.exposure_rank() > existing.bind_address.exposure_rank() {
+                        existing.bind_address = entry.bind_address;
+                    }
+                } else {
                     entries.push(entry);
                 }
             }

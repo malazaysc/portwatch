@@ -93,6 +93,12 @@ fn read_package_json(path: &Path) -> Option<TechInfo> {
 
 /// Extract a simple string value from JSON without pulling in a JSON parser.
 /// Handles: "key": "value" with basic escaping.
+///
+/// This is a deliberately naive heuristic: it returns the first `"key"` found
+/// anywhere in the document, so a matching key nested inside another object
+/// (e.g. under `scripts`) could be picked up instead of the top-level one. The
+/// only consequence is a mislabeled tech string, which is acceptable for a
+/// best-effort display hint; switch to a real JSON parser if accuracy matters.
 fn extract_json_string(json: &str, key: &str) -> Option<String> {
     let pattern = format!("\"{}\"", key);
     let idx = json.find(&pattern)?;

@@ -7,15 +7,12 @@ use std::path::PathBuf;
 pub struct Config {
     /// Refresh interval in seconds
     pub refresh_interval: u64,
-    /// Terminal emulator for "open folder" action
-    pub terminal: String,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
             refresh_interval: 3,
-            terminal: "finder".to_string(),
         }
     }
 }
