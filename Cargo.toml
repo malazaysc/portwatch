@@ -9,7 +9,7 @@ license = "MIT"
 ratatui = "0.29"
 crossterm = "0.28"
 tokio = { version = "1", features = ["full"] }
-sysinfo = "0.33"
+sysinfo = "0.39"
 anyhow = "1"
 dirs = "6"
 toml = "0.8"
