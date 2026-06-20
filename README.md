@@ -41,7 +41,7 @@ Built for developers juggling multiple projects, coding agents, and worktrees si
 - **Resource monitoring** — CPU% and RAM per process
 - **Search & sort** — filter by name/tech/port, sort by any column
 - **Actions** — kill process, open in browser, open folder, copy URL
-- **Config file** — customizable refresh interval and terminal emulator
+- **Config file** — customizable refresh interval
 
 ## Installation
 
@@ -73,6 +73,15 @@ sudo mv portwatch /usr/local/bin/
 curl -L https://github.com/malazaysc/portwatch/releases/latest/download/portwatch-linux-aarch64.tar.gz | tar xz
 sudo mv portwatch /usr/local/bin/
 ```
+
+> **macOS note:** the binaries aren't notarized, so a curl-downloaded `portwatch`
+> is quarantined by Gatekeeper ("cannot be verified"). Clear it once with:
+>
+> ```bash
+> xattr -d com.apple.quarantine /usr/local/bin/portwatch
+> ```
+>
+> Homebrew installs don't need this — `brew` strips the quarantine flag for you.
 
 ### Cargo (build from source)
 

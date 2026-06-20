@@ -67,7 +67,14 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      # Check out master (not the detached tag) with full history so we can
+      # commit the updated Homebrew formula back. The release itself is still
+      # created for the pushed tag via GITHUB_REF, regardless of the checked-out
+      # ref. The downloaded artifacts come from the build jobs, not from git.
       - uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
       - uses: actions/download-artifact@v4
         with:
           merge-multiple: true
@@ -84,6 +91,8 @@ jobs:
 
       - name: Update Homebrew formula
         run: |
+          set -euo pipefail
+
           SHA_MACOS_ARM=$(shasum -a 256 portwatch-macos-aarch64.tar.gz | cut -d' ' -f1)
           SHA_MACOS_X86=$(shasum -a 256 portwatch-macos-x86_64.tar.gz | cut -d' ' -f1)
           SHA_LINUX_ARM=$(shasum -a 256 portwatch-linux-aarch64.tar.gz | cut -d' ' -f1)
@@ -92,31 +101,39 @@ jobs:
 
           sed -i "s/version \".*\"/version \"${VERSION}\"/" Formula/portwatch.rb
 
-          # Update SHA256 hashes in order: arm mac, x86 mac, arm linux, x86 linux
-          python3 -c "
-          import re
-          with open('Formula/portwatch.rb') as f:
-              content = f.read()
-          placeholders = re.findall(r'sha256 \"[^\"]+\"', content)
-          replacements = [
-              'sha256 \"${SHA_MACOS_ARM}\"',
-              'sha256 \"${SHA_MACOS_X86}\"',
-              'sha256 \"${SHA_LINUX_ARM}\"',
-              'sha256 \"${SHA_LINUX_X86}\"',
-          ]
-          for old, new in zip(placeholders, replacements):
-              content = content.replace(old, new, 1)
-          with open('Formula/portwatch.rb', 'w') as f:
-              f.write(content)
-          "
-
-          # Expand shell variables in the file
-          envsubst < Formula/portwatch.rb > Formula/portwatch.rb.tmp
+          # Replace each sha256 by matching the filename in the url line that
+          # precedes it, so the update is independent of the block ordering and
+          # works whether the current value is a real hash or PLACEHOLDER.
+          awk \
+            -v m_arm="$SHA_MACOS_ARM" \
+            -v m_x86="$SHA_MACOS_X86" \
+            -v l_arm="$SHA_LINUX_ARM" \
+            -v l_x86="$SHA_LINUX_X86" '
+            /url / {
+              if ($0 ~ /macos-aarch64/)      pending = m_arm
+              else if ($0 ~ /macos-x86_64/)  pending = m_x86
+              else if ($0 ~ /linux-aarch64/) pending = l_arm
+              else if ($0 ~ /linux-x86_64/)  pending = l_x86
+              else                           pending = ""
+              print; next
+            }
+            /sha256 / && pending != "" {
+              sub(/sha256 "[^"]*"/, "sha256 \"" pending "\"")
+              pending = ""
+              print; next
+            }
+            { print }
+          ' Formula/portwatch.rb > Formula/portwatch.rb.tmp
           mv Formula/portwatch.rb.tmp Formula/portwatch.rb
+
+          if grep -q PLACEHOLDER Formula/portwatch.rb; then
+            echo "::error::Formula still contains PLACEHOLDER after update"
+            exit 1
+          fi
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout master
           git add Formula/portwatch.rb
-          git commit -m "chore: update Homebrew formula for v${VERSION}" || true
-          git push origin master
+          git commit -m "chore: update Homebrew formula for v${VERSION}" \
+            || { echo "Formula already up to date"; exit 0; }
+          git push origin HEAD:master
