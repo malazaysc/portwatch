@@ -63,7 +63,9 @@ fn find_package_json_up(script_path: &Path) -> Option<TechInfo> {
 }
 
 fn read_package_json(path: &Path) -> Option<TechInfo> {
-    let content = std::fs::read_to_string(path).ok()?;
+    // Size-capped, regular-file-only read: the path comes from an untrusted
+    // process's command line. See detect::read_metadata_file.
+    let content = super::read_metadata_file(path)?;
 
     // Quick JSON parsing — extract "name" and "description" fields
     let name = extract_json_string(&content, "name")?;
@@ -130,5 +132,44 @@ fn extract_json_string(json: &str, key: &str) -> Option<String> {
         None
     } else {
         Some(result)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extracts_basic_value() {
+        assert_eq!(
+            extract_json_string(r#"{"name": "express"}"#, "name").as_deref(),
+            Some("express")
+        );
+    }
+
+    #[test]
+    fn tolerates_whitespace_around_colon() {
+        assert_eq!(
+            extract_json_string("{ \"name\"  :   \"foo\" }", "name").as_deref(),
+            Some("foo")
+        );
+    }
+
+    #[test]
+    fn handles_escaped_quotes_in_value() {
+        assert_eq!(
+            extract_json_string(r#"{"name": "a\"b"}"#, "name").as_deref(),
+            Some("a\"b")
+        );
+    }
+
+    #[test]
+    fn missing_key_returns_none() {
+        assert_eq!(extract_json_string(r#"{"version": "1.0"}"#, "name"), None);
+    }
+
+    #[test]
+    fn empty_value_returns_none() {
+        assert_eq!(extract_json_string(r#"{"name": ""}"#, "name"), None);
     }
 }

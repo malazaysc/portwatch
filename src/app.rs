@@ -641,3 +641,102 @@ fn extract_parens_project(label: &str) -> Option<String> {
     }
     None
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::{BindAddress, DockerInfo, GitInfo, Protocol};
+    use std::path::PathBuf;
+
+    #[test]
+    fn extract_parens_project_skips_generic_labels() {
+        assert_eq!(
+            extract_parens_project("Cursor (navaris)").as_deref(),
+            Some("navaris")
+        );
+        assert_eq!(extract_parens_project("Chrome (debug port)"), None);
+        assert_eq!(extract_parens_project("Cursor (internal)"), None);
+        assert_eq!(extract_parens_project("Node.js"), None);
+    }
+
+    fn base_entry() -> PortEntry {
+        PortEntry {
+            port: 3000,
+            pid: 1,
+            process_name: "node".to_string(),
+            command_line: String::new(),
+            user: "alice".to_string(),
+            is_own: true,
+            bind_address: BindAddress::Local,
+            working_dir: None,
+            tech: None,
+            git_info: None,
+            uptime: None,
+            docker_info: None,
+            cpu_usage: None,
+            memory_mb: None,
+            net_rx_bytes: None,
+            net_tx_bytes: None,
+            net_rx_rate: None,
+            net_tx_rate: None,
+            protocol: Protocol::Tcp,
+        }
+    }
+
+    #[test]
+    fn project_key_prefers_git_repo_name() {
+        let mut e = base_entry();
+        e.git_info = Some(GitInfo {
+            branch: "main".to_string(),
+            repo_root: PathBuf::from("/home/u/dev/navaris"),
+            is_worktree: false,
+        });
+        // Working dir should be ignored when git info is present.
+        e.working_dir = Some(PathBuf::from("/home/u/dev/navaris/packages/web"));
+        assert_eq!(App::project_key(&e), "navaris");
+    }
+
+    #[test]
+    fn project_key_uses_docker_project_then_working_dir() {
+        let mut e = base_entry();
+        e.docker_info = Some(DockerInfo {
+            container_name: "db-1".to_string(),
+            image: "postgres".to_string(),
+            project: Some("asado".to_string()),
+        });
+        assert_eq!(App::project_key(&e), "asado");
+
+        let mut e2 = base_entry();
+        e2.working_dir = Some(PathBuf::from("/home/u/dev/asado"));
+        assert_eq!(App::project_key(&e2), "asado");
+    }
+
+    #[test]
+    fn project_key_uses_tech_workspace_label() {
+        let mut e = base_entry();
+        e.tech = Some(TechInfo {
+            name: "Cursor (navaris)".to_string(),
+            source: DetectionSource::CommandLine,
+        });
+        assert_eq!(App::project_key(&e), "navaris");
+    }
+
+    #[test]
+    fn project_key_groups_known_apps_by_name() {
+        // Step 5: a known app with no git/docker/workspace/dir groups under its
+        // process name rather than the generic "System" bucket.
+        let mut e = base_entry();
+        e.process_name = "zed".to_string();
+        assert_eq!(App::project_key(&e), "zed");
+    }
+
+    #[test]
+    fn project_key_falls_back_to_system() {
+        // No git, docker, tech label, or meaningful working dir.
+        assert_eq!(App::project_key(&base_entry()), "System");
+
+        let mut root = base_entry();
+        root.working_dir = Some(PathBuf::from("/"));
+        assert_eq!(App::project_key(&root), "System");
+    }
+}

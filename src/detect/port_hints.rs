@@ -30,3 +30,29 @@ pub fn detect(port: u16) -> Option<TechInfo> {
         source: DetectionSource::PortHeuristic,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn known_ports_resolve() {
+        assert_eq!(detect(5432).unwrap().name, "PostgreSQL");
+        assert_eq!(detect(6379).unwrap().name, "Redis");
+        assert_eq!(detect(3000).unwrap().name, "Node.js (likely)");
+        assert_eq!(detect(5173).unwrap().name, "Vite (likely)");
+    }
+
+    #[test]
+    fn known_ports_use_heuristic_source() {
+        assert!(matches!(
+            detect(5432).unwrap().source,
+            DetectionSource::PortHeuristic
+        ));
+    }
+
+    #[test]
+    fn unknown_port_returns_none() {
+        assert!(detect(12345).is_none());
+    }
+}
