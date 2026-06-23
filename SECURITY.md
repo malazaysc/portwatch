@@ -31,3 +31,26 @@ privileges and performs no network I/O of its own. Findings most relevant to
 this project include: incorrect exposure classification (a network-exposed
 port shown as local-only), unintended process termination, and any path that
 lets untrusted process metadata influence command execution.
+
+### Handling of untrusted process metadata
+
+A port's owning process chooses its own name, command line, and working
+directory, so all of those are untrusted input. portwatch treats them
+defensively:
+
+- **No shell interpolation.** Every external command is invoked with discrete
+  arguments (`Command::arg`), never via a shell, so crafted process names or
+  paths cannot inject commands.
+- **Exposure never downgrades.** When the same port appears multiple times
+  (e.g. IPv4 + IPv6), portwatch keeps the *most*-exposed bind, and any
+  unrecognized bind address is treated as exposed rather than local — it fails
+  toward over-reporting exposure, never under-reporting it.
+- **Bounded metadata reads.** Tech detection reads project files
+  (`package.json`, `Cargo.toml`, `requirements.txt`, …) from process-controlled
+  paths. These reads are restricted to regular files within a 1 MiB cap, so a
+  hostile process cannot point detection at a device, FIFO, or huge file to
+  hang or exhaust memory (see `detect::read_metadata_file`).
+- **Detection labels are display-only.** The detected technology and project
+  grouping affect what you see, never which PID a kill action targets — that is
+  always the highlighted row's own process, and the kernel enforces signal
+  permissions.

@@ -722,6 +722,15 @@ mod tests {
     }
 
     #[test]
+    fn project_key_groups_known_apps_by_name() {
+        // Step 5: a known app with no git/docker/workspace/dir groups under its
+        // process name rather than the generic "System" bucket.
+        let mut e = base_entry();
+        e.process_name = "zed".to_string();
+        assert_eq!(App::project_key(&e), "zed");
+    }
+
+    #[test]
     fn project_key_falls_back_to_system() {
         // No git, docker, tech label, or meaningful working dir.
         assert_eq!(App::project_key(&base_entry()), "System");

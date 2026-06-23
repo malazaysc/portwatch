@@ -32,7 +32,7 @@ pub fn detect(dir: &Path) -> Option<TechInfo> {
 }
 
 fn check_package_json(dir: &Path) -> Option<TechInfo> {
-    let content = std::fs::read_to_string(dir.join("package.json")).ok()?;
+    let content = super::read_metadata_file(&dir.join("package.json"))?;
     Some(match_package_json(&content))
 }
 
@@ -66,7 +66,7 @@ fn match_package_json(content: &str) -> TechInfo {
 }
 
 fn check_cargo_toml(dir: &Path) -> Option<TechInfo> {
-    let content = std::fs::read_to_string(dir.join("Cargo.toml")).ok()?;
+    let content = super::read_metadata_file(&dir.join("Cargo.toml"))?;
     Some(match_cargo_toml(&content))
 }
 
@@ -90,12 +90,12 @@ fn match_cargo_toml(content: &str) -> TechInfo {
 
 fn check_python(dir: &Path) -> Option<TechInfo> {
     // Check pyproject.toml first
-    if let Ok(content) = std::fs::read_to_string(dir.join("pyproject.toml")) {
+    if let Some(content) = super::read_metadata_file(&dir.join("pyproject.toml")) {
         return Some(match_python_deps(&content, "pyproject.toml"));
     }
 
     // Check requirements.txt
-    if let Ok(content) = std::fs::read_to_string(dir.join("requirements.txt")) {
+    if let Some(content) = super::read_metadata_file(&dir.join("requirements.txt")) {
         return Some(match_python_deps(&content, "requirements.txt"));
     }
 

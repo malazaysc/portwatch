@@ -63,7 +63,9 @@ fn find_package_json_up(script_path: &Path) -> Option<TechInfo> {
 }
 
 fn read_package_json(path: &Path) -> Option<TechInfo> {
-    let content = std::fs::read_to_string(path).ok()?;
+    // Size-capped, regular-file-only read: the path comes from an untrusted
+    // process's command line. See detect::read_metadata_file.
+    let content = super::read_metadata_file(path)?;
 
     // Quick JSON parsing — extract "name" and "description" fields
     let name = extract_json_string(&content, "name")?;
