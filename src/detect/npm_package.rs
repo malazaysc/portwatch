@@ -132,3 +132,42 @@ fn extract_json_string(json: &str, key: &str) -> Option<String> {
         Some(result)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extracts_basic_value() {
+        assert_eq!(
+            extract_json_string(r#"{"name": "express"}"#, "name").as_deref(),
+            Some("express")
+        );
+    }
+
+    #[test]
+    fn tolerates_whitespace_around_colon() {
+        assert_eq!(
+            extract_json_string("{ \"name\"  :   \"foo\" }", "name").as_deref(),
+            Some("foo")
+        );
+    }
+
+    #[test]
+    fn handles_escaped_quotes_in_value() {
+        assert_eq!(
+            extract_json_string(r#"{"name": "a\"b"}"#, "name").as_deref(),
+            Some("a\"b")
+        );
+    }
+
+    #[test]
+    fn missing_key_returns_none() {
+        assert_eq!(extract_json_string(r#"{"version": "1.0"}"#, "name"), None);
+    }
+
+    #[test]
+    fn empty_value_returns_none() {
+        assert_eq!(extract_json_string(r#"{"name": ""}"#, "name"), None);
+    }
+}

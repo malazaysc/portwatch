@@ -132,3 +132,99 @@ impl super::PortScanner for MacOsScanner {
         Ok(self.parse_lsof_output(&stdout))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn scanner() -> MacOsScanner {
+        MacOsScanner {
+            current_user: "alice".to_string(),
+        }
+    }
+
+    #[test]
+    fn unescape_lsof_decodes_hex_and_passes_through() {
+        assert_eq!(unescape_lsof("plain"), "plain");
+        // \x20 is a space — lsof escapes spaces in command names this way.
+        assert_eq!(unescape_lsof("Google\\x20Chrome"), "Google Chrome");
+        // A lone trailing backslash is preserved, not panicked on.
+        assert_eq!(unescape_lsof("weird\\"), "weird\\");
+    }
+
+    #[test]
+    fn parse_line_ipv4_local() {
+        let line = "node 71775 alice 23u IPv4 0x1234 0t0 TCP 127.0.0.1:3001 (LISTEN)";
+        let e = scanner().parse_line(line).unwrap();
+        assert_eq!(e.port, 3001);
+        assert_eq!(e.pid, 71775);
+        assert_eq!(e.process_name, "node");
+        assert!(e.is_own);
+        assert_eq!(e.bind_address, BindAddress::Local);
+        assert_eq!(e.protocol, Protocol::Tcp);
+    }
+
+    #[test]
+    fn parse_line_ipv6_exposed() {
+        let line = "caddy 42 root 7u IPv6 0xabc 0t0 TCP [::]:8080 (LISTEN)";
+        let e = scanner().parse_line(line).unwrap();
+        assert_eq!(e.port, 8080);
+        assert!(!e.is_own); // owned by root, not alice
+        assert_eq!(e.bind_address, BindAddress::Exposed);
+        assert_eq!(e.protocol, Protocol::Tcp6);
+    }
+
+    #[test]
+    fn parse_line_wildcard_and_specific_binds() {
+        let star = scanner()
+            .parse_line("srv 1 alice 3u IPv4 0x1 0t0 TCP *:3000 (LISTEN)")
+            .unwrap();
+        assert_eq!(star.bind_address, BindAddress::Exposed);
+
+        let specific = scanner()
+            .parse_line("srv 1 alice 3u IPv4 0x1 0t0 TCP 192.168.1.5:5000 (LISTEN)")
+            .unwrap();
+        assert_eq!(
+            specific.bind_address,
+            BindAddress::Specific("192.168.1.5".to_string())
+        );
+    }
+
+    #[test]
+    fn parse_line_rejects_malformed_input() {
+        // Too few fields.
+        assert!(scanner().parse_line("node 1 alice").is_none());
+        // Non-IP socket type (e.g. unix) is skipped.
+        assert!(
+            scanner()
+                .parse_line("node 1 alice 3u unix 0x1 0t0 TCP /tmp/sock (LISTEN)")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn parse_lsof_output_dedupes_and_escalates_exposure() {
+        // Same port listed twice (IPv4 local + IPv6 exposed) collapses to one
+        // row, keeping the most-exposed bind regardless of line order.
+        let output = "\
+COMMAND PID USER FD TYPE DEVICE SIZE/OFF NODE NAME
+node 1 alice 3u IPv4 0x1 0t0 TCP 127.0.0.1:3000 (LISTEN)
+node 1 alice 4u IPv6 0x2 0t0 TCP [::]:3000 (LISTEN)";
+        let entries = scanner().parse_lsof_output(output);
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].port, 3000);
+        assert_eq!(entries[0].bind_address, BindAddress::Exposed);
+    }
+
+    #[test]
+    fn parse_lsof_output_escalation_is_order_independent() {
+        // Exposed line first, local second — must still report Exposed.
+        let output = "\
+COMMAND PID USER FD TYPE DEVICE SIZE/OFF NODE NAME
+node 1 alice 4u IPv6 0x2 0t0 TCP [::]:3000 (LISTEN)
+node 1 alice 3u IPv4 0x1 0t0 TCP 127.0.0.1:3000 (LISTEN)";
+        let entries = scanner().parse_lsof_output(output);
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].bind_address, BindAddress::Exposed);
+    }
+}

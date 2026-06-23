@@ -139,3 +139,48 @@ pub fn format_uptime(duration: &std::time::Duration) -> String {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn format_uptime_covers_all_ranges() {
+        assert_eq!(format_uptime(&Duration::from_secs(30)), "<1m");
+        assert_eq!(format_uptime(&Duration::from_secs(90)), "1m");
+        assert_eq!(format_uptime(&Duration::from_secs(3600)), "1h");
+        assert_eq!(format_uptime(&Duration::from_secs(3660)), "1h 1m");
+        assert_eq!(format_uptime(&Duration::from_secs(86_400)), "1d");
+        assert_eq!(format_uptime(&Duration::from_secs(90_000)), "1d 1h");
+        // Whole days with no leftover hours omit the hour component.
+        assert_eq!(format_uptime(&Duration::from_secs(172_800)), "2d");
+    }
+
+    #[test]
+    fn exposure_rank_orders_local_below_exposed() {
+        assert!(
+            BindAddress::Local.exposure_rank() < BindAddress::Specific("x".into()).exposure_rank()
+        );
+        assert!(
+            BindAddress::Specific("x".into()).exposure_rank()
+                < BindAddress::Exposed.exposure_rank()
+        );
+    }
+
+    #[test]
+    fn bind_address_display() {
+        assert_eq!(BindAddress::Local.to_string(), "127.0.0.1 (local)");
+        assert_eq!(BindAddress::Exposed.to_string(), "0.0.0.0 (exposed)");
+        assert_eq!(
+            BindAddress::Specific("10.0.0.5".into()).to_string(),
+            "10.0.0.5"
+        );
+    }
+
+    #[test]
+    fn protocol_display() {
+        assert_eq!(Protocol::Tcp.to_string(), "TCP");
+        assert_eq!(Protocol::Tcp6.to_string(), "TCP6");
+    }
+}

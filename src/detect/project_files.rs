@@ -32,9 +32,13 @@ pub fn detect(dir: &Path) -> Option<TechInfo> {
 }
 
 fn check_package_json(dir: &Path) -> Option<TechInfo> {
-    let path = dir.join("package.json");
-    let content = std::fs::read_to_string(path).ok()?;
+    let content = std::fs::read_to_string(dir.join("package.json")).ok()?;
+    Some(match_package_json(&content))
+}
 
+/// Identify a JS/TS framework from package.json contents. Frameworks are checked
+/// before generic runtimes; falls back to plain Node.js when nothing matches.
+fn match_package_json(content: &str) -> TechInfo {
     // Check deps in priority order (frameworks before runtimes)
     let checks: &[(&str, &str)] = &[
         ("\"next\"", "Next.js"),
@@ -53,18 +57,21 @@ fn check_package_json(dir: &Path) -> Option<TechInfo> {
 
     for (pattern, name) in checks {
         if content.contains(pattern) {
-            return Some(make(name, "package.json"));
+            return make(name, "package.json");
         }
     }
 
     // Generic Node.js if package.json exists but no framework matched
-    Some(make("Node.js", "package.json"))
+    make("Node.js", "package.json")
 }
 
 fn check_cargo_toml(dir: &Path) -> Option<TechInfo> {
-    let path = dir.join("Cargo.toml");
-    let content = std::fs::read_to_string(path).ok()?;
+    let content = std::fs::read_to_string(dir.join("Cargo.toml")).ok()?;
+    Some(match_cargo_toml(&content))
+}
 
+/// Identify a Rust web framework from Cargo.toml contents; falls back to Rust.
+fn match_cargo_toml(content: &str) -> TechInfo {
     let checks: &[(&str, &str)] = &[
         ("axum", "Axum (Rust)"),
         ("actix-web", "Actix (Rust)"),
@@ -74,40 +81,22 @@ fn check_cargo_toml(dir: &Path) -> Option<TechInfo> {
 
     for (pattern, name) in checks {
         if content.contains(pattern) {
-            return Some(make(name, "Cargo.toml"));
+            return make(name, "Cargo.toml");
         }
     }
 
-    Some(make("Rust", "Cargo.toml"))
+    make("Rust", "Cargo.toml")
 }
 
 fn check_python(dir: &Path) -> Option<TechInfo> {
     // Check pyproject.toml first
     if let Ok(content) = std::fs::read_to_string(dir.join("pyproject.toml")) {
-        if content.contains("django") {
-            return Some(make("Django", "pyproject.toml"));
-        }
-        if content.contains("flask") {
-            return Some(make("Flask", "pyproject.toml"));
-        }
-        if content.contains("fastapi") {
-            return Some(make("FastAPI", "pyproject.toml"));
-        }
-        return Some(make("Python", "pyproject.toml"));
+        return Some(match_python_deps(&content, "pyproject.toml"));
     }
 
     // Check requirements.txt
     if let Ok(content) = std::fs::read_to_string(dir.join("requirements.txt")) {
-        if content.contains("django") || content.contains("Django") {
-            return Some(make("Django", "requirements.txt"));
-        }
-        if content.contains("flask") || content.contains("Flask") {
-            return Some(make("Flask", "requirements.txt"));
-        }
-        if content.contains("fastapi") || content.contains("FastAPI") {
-            return Some(make("FastAPI", "requirements.txt"));
-        }
-        return Some(make("Python", "requirements.txt"));
+        return Some(match_python_deps(&content, "requirements.txt"));
     }
 
     // Check manage.py
@@ -118,10 +107,74 @@ fn check_python(dir: &Path) -> Option<TechInfo> {
     None
 }
 
+/// Identify a Python web framework from dependency-file contents (case
+/// insensitive); falls back to plain Python.
+fn match_python_deps(content: &str, source_file: &str) -> TechInfo {
+    let lower = content.to_lowercase();
+    if lower.contains("django") {
+        make("Django", source_file)
+    } else if lower.contains("flask") {
+        make("Flask", source_file)
+    } else if lower.contains("fastapi") {
+        make("FastAPI", source_file)
+    } else {
+        make("Python", source_file)
+    }
+}
+
 fn make(name: &str, source_file: &str) -> TechInfo {
     let _ = source_file; // used for debugging context, could be stored later
     TechInfo {
         name: name.to_string(),
         source: DetectionSource::ProjectFile,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn package_json_prefers_framework_over_node() {
+        let pkg = r#"{ "dependencies": { "next": "14", "react": "18" } }"#;
+        assert_eq!(match_package_json(pkg).name, "Next.js");
+    }
+
+    #[test]
+    fn package_json_priority_orders_next_before_vite() {
+        // A project listing both should report the higher-priority framework.
+        let pkg = r#"{ "dependencies": { "vite": "5", "next": "14" } }"#;
+        assert_eq!(match_package_json(pkg).name, "Next.js");
+    }
+
+    #[test]
+    fn package_json_falls_back_to_node() {
+        let pkg = r#"{ "dependencies": { "lodash": "4" } }"#;
+        assert_eq!(match_package_json(pkg).name, "Node.js");
+    }
+
+    #[test]
+    fn cargo_toml_detects_axum_then_falls_back_to_rust() {
+        assert_eq!(
+            match_cargo_toml("[dependencies]\naxum = \"0.7\"").name,
+            "Axum (Rust)"
+        );
+        assert_eq!(
+            match_cargo_toml("[dependencies]\nserde = \"1\"").name,
+            "Rust"
+        );
+    }
+
+    #[test]
+    fn python_deps_are_case_insensitive() {
+        assert_eq!(
+            match_python_deps("Django==5.0", "requirements.txt").name,
+            "Django"
+        );
+        assert_eq!(match_python_deps("flask", "pyproject.toml").name, "Flask");
+        assert_eq!(
+            match_python_deps("numpy", "requirements.txt").name,
+            "Python"
+        );
     }
 }
