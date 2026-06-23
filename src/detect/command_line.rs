@@ -50,11 +50,13 @@ pub fn detect(command_line: &str) -> Option<TechInfo> {
             "Go"
         } else if cmd.contains("deno") {
             "Deno"
-        } else if (cmd.contains("/bun") || cmd.contains("bun ") || cmd.starts_with("bun"))
-            && !cmd.contains("bundle")
+        } else if cmd
+            .split(|c: char| c.is_whitespace() || c == '/')
+            .any(|t| t == "bun" || t == "bunx")
         {
-            // Match the `bun` runtime by token boundary, not a bare substring —
-            // otherwise common paths like `/home/ubuntu/...` get mislabeled "Bun".
+            // Match the `bun` runtime by exact path/arg token, not a bare substring.
+            // A substring check mislabels `/home/ubuntu/...` as "Bun" and needs a
+            // brittle `bundle` exclusion; an exact-token check avoids both.
             "Bun"
         } else if cmd.contains("tsx") || cmd.contains("ts-node") {
             "TypeScript"
@@ -230,14 +232,29 @@ mod tests {
     }
 
     #[test]
-    fn bun_matches_runtime_but_not_bundle_or_ubuntu() {
+    fn bun_matches_runtime_by_exact_token() {
         assert_eq!(name_of(detect("bun run dev")).as_deref(), Some("Bun"));
+        assert_eq!(
+            name_of(detect("bunx create-next-app")).as_deref(),
+            Some("Bun")
+        );
         assert_eq!(
             name_of(detect("/home/me/.bun/bin/bun start")).as_deref(),
             Some("Bun")
         );
+        // A script literally named `bundle` run by bun is still bun.
+        assert_eq!(
+            name_of(detect("/home/me/.bun/bin/bun run bundle")).as_deref(),
+            Some("Bun")
+        );
+    }
+
+    #[test]
+    fn bun_does_not_match_substrings() {
         // Regression: a path containing "ubuntu" must not be mislabeled "Bun".
         assert_eq!(name_of(detect("/home/ubuntu/app/myserver")), None);
+        // A process whose name merely contains "bun" is not the bun runtime.
+        assert_eq!(name_of(detect("/usr/bin/bunny-server")), None);
         // "bundle" (Ruby) must not trip the bun branch.
         assert_eq!(name_of(detect("ruby /usr/bin/bundle install")), None);
     }
